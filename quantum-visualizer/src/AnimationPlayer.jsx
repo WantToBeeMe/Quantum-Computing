@@ -41,8 +41,8 @@ export default function AnimationPlayer({
             return () => cancelAnimationFrame(id);
         }
 
-        // Fixed timing for all segments: 800ms animation + 400ms pause = 1200ms per segment
-        const duration = 1200;
+        // Fixed timing for all segments: 1000ms animation + 500ms pause = 1500ms per segment
+        const duration = 1500;
 
         const timer = setTimeout(() => {
             if (currentFrame < totalFrames - 1) {

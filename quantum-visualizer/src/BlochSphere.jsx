@@ -127,7 +127,7 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
     }, [rotations, isPlayMode]);
 
     useFrame((_, delta) => {
-        const speed = delta * 4; // Faster animation to match segment timing
+        const speed = delta * 3; // Slower animation to match segment timing
         const targetVec = getTargetVector(rotations);
 
         if (isSnapping.current) {

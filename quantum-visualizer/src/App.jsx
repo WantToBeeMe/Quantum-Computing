@@ -40,45 +40,9 @@ function App() {
 
   // Compute animation duration per segment (for timeline)
   const segmentDurations = useMemo(() => {
-    const sortedBarriers = [...barriers].sort((a, b) => a - b);
-    const durations = [];
-
-    // Helper to get animation duration for a gate
-    const getGateDuration = (gate) => {
-      const info = GATES[gate.gate] || gate;
-      if (info.animDuration !== null) return info.animDuration;
-      // U gate: compute from params
-      if (info.isParametric && gate.params) {
-        const { theta, phi, lambda } = gate.params;
-        return (Math.abs(theta) + Math.abs(lambda)) / Math.PI;
-      }
-      return 0;
-    };
-
-    // For each segment, sum durations of all gates across all qubits
-    for (let frame = 1; frame < totalFrames; frame++) {
-      let segmentDuration = 0;
-
-      for (let qi = 0; qi < circuits.length; qi++) {
-        const row = circuits[qi] || [];
-        const entries = row.map((g, s) => ({ gate: g, slot: s })).filter(e => e.gate);
-
-        let prevSlot = frame === 1 ? -1 : (sortedBarriers[frame - 2] ?? -1);
-        let currSlot = frame <= barrierCount ? sortedBarriers[frame - 1] : Infinity;
-
-        // Gates in range (prevSlot, currSlot)
-        for (const entry of entries) {
-          if (entry.slot > prevSlot && entry.slot < currSlot) {
-            segmentDuration += getGateDuration(entry.gate);
-          }
-        }
-      }
-
-      durations.push(Math.max(segmentDuration, 0.1)); // Minimum 0.1 for visibility
-    }
-
-    return durations;
-  }, [circuits, barriers, totalFrames, barrierCount]);
+    // Return equal duration for each segment to ensure uniform timeline
+    return new Array(Math.max(0, totalFrames - 1)).fill(1);
+  }, [totalFrames]);
 
   // Get gates up to a certain animation frame
   // Frame 0 = no gates
@@ -205,9 +169,11 @@ function App() {
   const allProbabilities = useMemo(() => getMultiQubitProbabilities(qubitStates, true), [qubitStates]);
 
   const handleInsertGate = useCallback((qi, si, gate) => {
+    const isOccupied = circuits[qi] && circuits[qi][si];
+
     setCircuits(prev => {
       const next = prev.map(r => [...r]);
-      if (next[qi][si]) {
+      if (isOccupied) {
         // Shift gates
         for (let q = 0; q < next.length; q++) {
           const newRow = [];
@@ -223,15 +189,19 @@ function App() {
           }
           next[q] = newRow;
         }
-        setBarriers(b => b.map(bi => bi >= si ? bi + 1 : bi));
       } else {
         next[qi][si] = gate;
       }
       return next;
     });
+
+    if (isOccupied) {
+      setBarriers(b => b.map(bi => bi >= si ? bi + 1 : bi));
+    }
+
     setAnimationFrame(-1);
     setIsPlaying(false);
-  }, []);
+  }, [circuits]);
 
   const handleRemoveGate = useCallback((qi, si) => {
     setCircuits(prev => {
