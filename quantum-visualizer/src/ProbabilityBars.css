@@ -1,0 +1,124 @@
+.probability-bars {
+    background: #161b22;
+    border-radius: 10px;
+    padding: 12px;
+    border: 1px solid #30363d;
+}
+
+.prob-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.prob-title {
+    margin: 0;
+    color: #c9d1d9;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.mode-toggle {
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mode-toggle:hover {
+    background: #30363d;
+    border-color: #58a6ff;
+    color: #58a6ff;
+}
+
+.prob-container {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    max-height: 140px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.prob-container::-webkit-scrollbar {
+    width: 5px;
+}
+
+.prob-container::-webkit-scrollbar-track {
+    background: #21262d;
+    border-radius: 3px;
+}
+
+.prob-container::-webkit-scrollbar-thumb {
+    background: #484f58;
+    border-radius: 3px;
+}
+
+.prob-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.prob-row.zero-prob {
+    opacity: 0.4;
+}
+
+.prob-row.others {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px dashed #30363d;
+}
+
+.prob-label {
+    color: #c9d1d9;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    min-width: 45px;
+}
+
+.prob-bar-track {
+    flex: 1;
+    height: 14px;
+    background: #21262d;
+    border-radius: 7px;
+    overflow: hidden;
+}
+
+.prob-bar {
+    height: 100%;
+    border-radius: 7px;
+    transition: width 0.3s ease;
+    background: linear-gradient(90deg, #58a6ff, #a371f7);
+    box-shadow: 0 0 8px rgba(88, 166, 255, 0.3);
+    min-width: 2px;
+}
+
+.prob-bar.others-bar {
+    background: linear-gradient(90deg, #f85149, #a371f7);
+    box-shadow: 0 0 8px rgba(248, 81, 73, 0.3);
+}
+
+.prob-value {
+    color: #8b949e;
+    font-size: 11px;
+    min-width: 40px;
+    text-align: right;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.prob-empty {
+    color: #484f58;
+    font-size: 12px;
+    font-style: italic;
+}

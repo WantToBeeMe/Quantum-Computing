@@ -1,0 +1,231 @@
+.gate-settings {
+    background: #161b22;
+    border-radius: 10px;
+    padding: 12px;
+    border: 1px solid #30363d;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.gate-settings.empty {
+    align-items: center;
+    justify-content: center;
+    min-height: 50px;
+}
+
+.placeholder {
+    color: #484f58;
+    font-size: 11px;
+    font-style: italic;
+}
+
+.settings-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.gate-badge {
+    width: 26px;
+    height: 26px;
+    border: 2px solid var(--gate-color);
+    color: var(--gate-color);
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 11px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.gate-badge.barrier {
+    border-style: dashed;
+    border-color: #8b949e;
+    color: #8b949e;
+}
+
+.gate-name {
+    color: #8b949e;
+    font-size: 11px;
+    flex: 1;
+}
+
+.param-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.param-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+    color: #8b949e;
+}
+
+.slider-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    font-size: 10px;
+}
+
+.slider-toggle input {
+    accent-color: #58a6ff;
+}
+
+.param-grid {
+    display: flex;
+    gap: 6px;
+}
+
+.param-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+}
+
+.param-row label {
+    color: #8b949e;
+    font-size: 10px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.param-row input {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    padding: 4px 6px;
+    color: #c9d1d9;
+    font-size: 10px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    width: 100%;
+}
+
+.param-row input:focus {
+    outline: none;
+    border-color: #58a6ff;
+}
+
+.param-sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.slider-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.slider-row label {
+    color: #8b949e;
+    font-size: 10px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    width: 10px;
+}
+
+.slider-row input[type="range"] {
+    flex: 1;
+    accent-color: #58a6ff;
+    height: 4px;
+}
+
+.slider-value {
+    color: #58a6ff;
+    font-size: 10px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    min-width: 32px;
+    text-align: right;
+}
+
+.control-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.control-toggle {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    color: #c9d1d9;
+    font-size: 11px;
+}
+
+.control-toggle input {
+    accent-color: #a371f7;
+}
+
+.control-select {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.control-qubit-btn {
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.control-qubit-btn:hover {
+    background: #30363d;
+    color: #c9d1d9;
+}
+
+.control-qubit-btn.active {
+    background: #a371f7;
+    border-color: #a371f7;
+    color: #0d1117;
+    font-weight: 600;
+}
+
+.settings-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.action-btn {
+    flex: 1;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.action-btn.remove {
+    background: rgba(248, 81, 73, 0.1);
+    color: #f85149;
+    border: 1px solid rgba(248, 81, 73, 0.2);
+}
+
+.action-btn.remove:hover {
+    background: rgba(248, 81, 73, 0.2);
+}
+
+.action-btn.decompose {
+    background: rgba(163, 113, 247, 0.1);
+    color: #a371f7;
+    border: 1px solid rgba(163, 113, 247, 0.2);
+}
+
+.action-btn.decompose:hover {
+    background: rgba(163, 113, 247, 0.2);
+}

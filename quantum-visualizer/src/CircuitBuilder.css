@@ -1,0 +1,325 @@
+.circuit-builder {
+    background: #161b22;
+    border-radius: 10px;
+    padding: 12px;
+    border: 1px solid #30363d;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.circuit-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.circuit-title {
+    margin: 0;
+    color: #c9d1d9;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.circuit-board {
+    overflow: visible;
+}
+
+.circuit-grid {
+    display: flex;
+    gap: 0;
+}
+
+.qubit-labels {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex-shrink: 0;
+    padding-right: 6px;
+}
+
+.qubit-row-label {
+    height: 36px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.qubit-label {
+    background: none;
+    border: none;
+    color: #58a6ff;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    padding: 4px 5px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.qubit-label:hover {
+    background: rgba(88, 166, 255, 0.1);
+}
+
+.qubit-btn {
+    background: none;
+    border: none;
+    font-size: 14px;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+    opacity: 0.5;
+    color: #8b949e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.qubit-btn:hover:not(:disabled) {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.qubit-btn:disabled {
+    opacity: 0.15;
+    cursor: not-allowed;
+}
+
+.qubit-btn.eye.hidden {
+    opacity: 0.25;
+}
+
+.qubit-btn.trash:hover:not(:disabled) {
+    color: #f85149;
+    background: rgba(248, 81, 73, 0.2);
+}
+
+.circuit-slots-wrapper {
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.circuit-slots-wrapper::-webkit-scrollbar {
+    height: 5px;
+}
+
+.circuit-slots-wrapper::-webkit-scrollbar-track {
+    background: #21262d;
+    border-radius: 3px;
+}
+
+.circuit-slots-wrapper::-webkit-scrollbar-thumb {
+    background: #484f58;
+    border-radius: 3px;
+}
+
+.circuit-slots {
+    position: relative;
+    min-width: calc(var(--slot-count) * 38px);
+    height: var(--total-height);
+    padding: 0 4px;
+}
+
+.qubit-track {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(var(--row) * 42px + 18px);
+    height: 2px;
+    background: linear-gradient(90deg, #30363d, #58a6ff 20%, #58a6ff 80%, #30363d);
+    pointer-events: none;
+}
+
+/* Control lines SVG */
+.control-lines-svg {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Gates */
+.circuit-gate {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    left: calc(var(--slot) * 38px + 3px);
+    top: calc(var(--row) * 42px + 3px);
+    background: #0d1117;
+    border: 2px solid var(--gate-color);
+    color: var(--gate-color);
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 11px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    cursor: grab;
+    transition: all 0.1s ease;
+    z-index: 10;
+}
+
+.circuit-gate:hover {
+    box-shadow: 0 0 12px var(--gate-color);
+    z-index: 20;
+}
+
+/* Selected gate: filled background with color glow */
+.circuit-gate.selected {
+    background: var(--gate-color);
+    color: #0d1117;
+    box-shadow: 0 0 16px var(--gate-color), 0 0 24px var(--gate-color);
+    z-index: 25;
+}
+
+.circuit-gate.dragging {
+    opacity: 0.4;
+    cursor: grabbing;
+}
+
+/* Disabled gates during animation */
+.circuit-gate.disabled {
+    background: #30363d !important;
+    border-color: #484f58 !important;
+    color: #6e7681 !important;
+    pointer-events: none;
+    opacity: 0.5;
+}
+
+.control-indicator {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #a371f7;
+    color: #0d1117;
+    font-size: 7px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+/* Drop highlight for empty slot */
+.drop-highlight {
+    position: absolute;
+    width: 34px;
+    height: 34px;
+    left: calc(var(--slot) * 38px + 2px);
+    top: calc(var(--row) * 42px + 2px);
+    border: 2px dashed #58a6ff;
+    background: rgba(88, 166, 255, 0.1);
+    border-radius: 5px;
+    pointer-events: none;
+    z-index: 5;
+}
+
+/* Insert indicator - green bar on side of occupied slot */
+.insert-indicator {
+    position: absolute;
+    width: 4px;
+    height: 34px;
+    top: calc(var(--row) * 42px + 2px);
+    background: #3fb950;
+    border-radius: 2px;
+    pointer-events: none;
+    z-index: 20;
+    box-shadow: 0 0 8px rgba(63, 185, 80, 0.5);
+}
+
+.insert-indicator.left {
+    left: calc(var(--slot) * 38px - 2px);
+}
+
+.insert-indicator.right {
+    left: calc(var(--slot) * 38px + 36px);
+}
+
+/* Barrier line */
+.barrier-line {
+    position: absolute;
+    width: 4px;
+    left: calc(var(--slot) * 38px - 2px);
+    top: 0;
+    height: var(--total-height);
+    background: repeating-linear-gradient(to bottom,
+            #6e7681 0px,
+            #6e7681 4px,
+            transparent 4px,
+            transparent 8px);
+    border-radius: 2px;
+    cursor: pointer;
+    z-index: 8;
+    transition: all 0.15s ease;
+}
+
+.barrier-line:hover {
+    background: repeating-linear-gradient(to bottom,
+            #c9d1d9 0px,
+            #c9d1d9 4px,
+            transparent 4px,
+            transparent 8px);
+}
+
+.barrier-line.selected {
+    background: repeating-linear-gradient(to bottom,
+            #c9d1d9 0px,
+            #c9d1d9 4px,
+            transparent 4px,
+            transparent 8px);
+    box-shadow: 0 0 8px rgba(201, 209, 217, 0.4);
+}
+
+.barrier-line.highlighted {
+    background: repeating-linear-gradient(to bottom,
+            #f0883e 0px,
+            #f0883e 4px,
+            transparent 4px,
+            transparent 8px);
+    box-shadow: 0 0 8px rgba(240, 136, 62, 0.5);
+}
+
+/* Barrier indicator while dragging */
+.barrier-indicator {
+    position: absolute;
+    width: 6px;
+    left: calc(var(--slot) * 38px - 3px);
+    top: 0;
+    height: var(--total-height);
+    background: repeating-linear-gradient(to bottom,
+            #8b949e 0px,
+            #8b949e 4px,
+            transparent 4px,
+            transparent 8px);
+    border-radius: 3px;
+    pointer-events: none;
+    z-index: 20;
+    box-shadow: 0 0 10px rgba(139, 148, 158, 0.5);
+}
+
+.add-qubit-button {
+    background: #21262d;
+    border: 1px dashed #30363d;
+    color: #8b949e;
+    padding: 7px 12px;
+    border-radius: 5px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.add-qubit-button:hover {
+    background: #30363d;
+    border-color: #58a6ff;
+    color: #58a6ff;
+}

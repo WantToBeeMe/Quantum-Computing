@@ -1,0 +1,113 @@
+.animation-player {
+    background: #161b22;
+    border-radius: 8px;
+    padding: 8px 10px;
+    border: 1px solid #30363d;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.player-controls {
+    display: flex;
+    gap: 3px;
+}
+
+.player-btn {
+    background: transparent;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.player-btn.step {
+    width: 24px;
+    height: 24px;
+}
+
+.player-btn.play {
+    width: 30px;
+    height: 28px;
+    background: #238636;
+    border-color: #238636;
+    color: white;
+}
+
+.player-btn:hover:not(:disabled) {
+    background: #30363d;
+    color: #c9d1d9;
+}
+
+.player-btn.play:hover {
+    background: #2ea043;
+    border-color: #2ea043;
+}
+
+.player-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* Segmented timeline */
+.player-progress {
+    flex: 1;
+    height: 6px;
+    background: #21262d;
+    border-radius: 3px;
+    display: flex;
+    gap: 2px;
+    overflow: visible;
+}
+
+.segment {
+    height: 100%;
+    background: #30363d;
+    transition: background 0.3s ease;
+}
+
+/* First segment rounded left, last rounded right */
+.segment:first-child {
+    border-radius: 3px 0 0 3px;
+}
+
+.segment:last-child {
+    border-radius: 0 3px 3px 0;
+}
+
+.segment:only-child {
+    border-radius: 3px;
+}
+
+.segment.completed {
+    background: linear-gradient(90deg, #58a6ff, #a371f7);
+}
+
+.segment.animating {
+    background: linear-gradient(90deg, #58a6ff, #a371f7);
+    animation: pulse 0.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.6;
+    }
+}
+
+.frame-label {
+    font-size: 10px;
+    color: #8b949e;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    min-width: 28px;
+    text-align: right;
+}
