@@ -32,7 +32,17 @@ const applyRotation = (vec, axis, angle) => {
 const getTargetVector = (rotations) => {
     let v = new THREE.Vector3(0, 1, 0); // |0⟩
     for (const rot of rotations) {
-        v = applyRotation(v, rot.axis, rot.angle);
+        if (rot.isCompound) {
+            // Compound rotation: apply theta (Y) then lambda (Z)
+            if (Math.abs(rot.theta || 0) > 0.01) {
+                v = applyRotation(v, 'y', rot.theta);
+            }
+            if (Math.abs(rot.lambda || 0) > 0.01) {
+                v = applyRotation(v, 'z', rot.lambda);
+            }
+        } else {
+            v = applyRotation(v, rot.axis, rot.angle);
+        }
     }
     return v;
 };
@@ -53,15 +63,22 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
     const wasPlayMode = useRef(false);
     const playStarted = useRef(false);
 
-    // Compute target lambda from rotations (sum of all z-axis angles)
+    // Compute target lambda from rotations (sum of all z-axis angles + compound lambda)
     const getTargetLambda = (rots) => {
-        return rots.filter(r => r.axis === 'z').reduce((acc, r) => acc + r.angle, 0);
+        return rots.reduce((acc, r) => {
+            if (r.isCompound) return acc + (r.lambda || 0);
+            if (r.axis === 'z') return acc + r.angle;
+            return acc;
+        }, 0);
     };
 
     // Generate signature for rotations array
     const getRotationSignature = (rots) => {
         if (!rots || rots.length === 0) return '';
-        return rots.map(r => `${r.axis}:${r.angle.toFixed(4)}`).join('|');
+        return rots.map(r => {
+            if (r.isCompound) return `c:${(r.theta || 0).toFixed(4)}:${(r.lambda || 0).toFixed(4)}`;
+            return `${r.axis}:${r.angle.toFixed(4)}`;
+        }).join('|');
     };
 
     // Handle rotation changes
@@ -148,19 +165,48 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
             const rot = rotations[rotIdx];
             currentRotationProgress.current += speed;
 
-            if (currentRotationProgress.current >= 1) {
-                baseVec.current = applyRotation(baseVec.current, rot.axis, rot.angle);
-                if (rot.axis === 'z') baseLambda.current += rot.angle;
-                setDisplayVec(baseVec.current.clone());
-                setDisplayLambda(baseLambda.current);
-                animatedRotationCount.current++;
-                currentRotationProgress.current = 0;
+            if (rot.isCompound) {
+                // Compound rotation: animate theta (Y-axis), apply lambda (Z-axis) instantly
+                const partialT = Math.min(currentRotationProgress.current, 1);
+                const partialTheta = (rot.theta || 0) * partialT;
+                const fullLambda = rot.lambda || 0; // Lambda is applied instantly
+
+                // Apply rotations from base
+                let newVec = baseVec.current.clone();
+                if (Math.abs(rot.theta || 0) > 0.01) {
+                    newVec = applyRotation(newVec, 'y', partialTheta);
+                }
+                // Lambda always applied fully (not animated)
+                if (Math.abs(fullLambda) > 0.01) {
+                    newVec = applyRotation(newVec, 'z', fullLambda);
+                }
+                setDisplayVec(newVec);
+                // Lambda display is also instant
+                setDisplayLambda(baseLambda.current + fullLambda);
+
+                if (currentRotationProgress.current >= 1) {
+                    // Complete this compound rotation
+                    baseVec.current = newVec.clone();
+                    baseLambda.current += fullLambda;
+                    animatedRotationCount.current++;
+                    currentRotationProgress.current = 0;
+                }
             } else {
-                const partialAngle = rot.angle * currentRotationProgress.current;
-                const partialVec = applyRotation(baseVec.current, rot.axis, partialAngle);
-                setDisplayVec(partialVec);
-                if (rot.axis === 'z') {
-                    setDisplayLambda(baseLambda.current + partialAngle);
+                // Simple single-axis rotation
+                if (currentRotationProgress.current >= 1) {
+                    baseVec.current = applyRotation(baseVec.current, rot.axis, rot.angle);
+                    if (rot.axis === 'z') baseLambda.current += rot.angle;
+                    setDisplayVec(baseVec.current.clone());
+                    setDisplayLambda(baseLambda.current);
+                    animatedRotationCount.current++;
+                    currentRotationProgress.current = 0;
+                } else {
+                    const partialAngle = rot.angle * currentRotationProgress.current;
+                    const partialVec = applyRotation(baseVec.current, rot.axis, partialAngle);
+                    setDisplayVec(partialVec);
+                    if (rot.axis === 'z') {
+                        setDisplayLambda(baseLambda.current + partialAngle);
+                    }
                 }
             }
         } else if (rotations.length === 0) {
@@ -213,8 +259,8 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
 
         for (let i = 0; i <= segments; i++) {
             const t = (i / segments) * arcAngle;
-            // Start from |-⟩ direction (local -X), sweep in lambda direction
-            const angle = Math.PI + t; // π is the -X direction in the XZ plane
+            // Start from |-⟩ direction (local -X), sweep in same direction as stick rotation
+            const angle = Math.PI - t; // Flip direction: π - t instead of π + t
             points.push([radius * Math.cos(angle), 0, radius * Math.sin(angle)]);
         }
         return points;

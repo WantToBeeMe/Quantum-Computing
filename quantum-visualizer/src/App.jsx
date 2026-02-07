@@ -100,18 +100,28 @@ function App() {
       const controlledGate = gates.find(g => g.controlQubit !== undefined);
       const hasControl = !!controlledGate;
 
-      // Calculate cumulative rotations
+      // Calculate cumulative rotations - use U-gate decomposition for all gates
       const rotations = [];
       for (const gate of gates) {
         const info = GATES[gate.gate] || gate;
-        if (info.rotation) {
-          rotations.push({ ...info.rotation });
-        } else if (info.isParametric && gate.params) {
-          if (Math.abs(gate.params.theta) > 0.01) {
-            rotations.push({ axis: 'y', angle: gate.params.theta });
-          }
-          if (Math.abs(gate.params.lambda) > 0.01) {
-            rotations.push({ axis: 'z', angle: gate.params.lambda });
+
+        // Use decomposition params if available, otherwise use direct params
+        let params = gate.params;
+        if (info.decomposition && info.decomposition.params) {
+          params = info.decomposition.params;
+        }
+
+        if (params) {
+          const theta = params.theta || 0;
+          const lambda = params.lambda || 0;
+          const hasTheta = Math.abs(theta) > 0.01;
+          const hasLambda = Math.abs(lambda) > 0.01;
+          if (hasTheta || hasLambda) {
+            rotations.push({
+              theta: hasTheta ? theta : 0,
+              lambda: hasLambda ? lambda : 0,
+              isCompound: true
+            });
           }
         }
       }
