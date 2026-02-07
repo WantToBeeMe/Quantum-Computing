@@ -159,7 +159,7 @@ export default function GateSettings({ gate, gateIndex, qubitIndex, onRemove, on
                             {['theta', 'phi', 'lambda'].map(key => (
                                 <div key={key} className="slider-row">
                                     <label>{key === 'theta' ? 'θ' : key === 'phi' ? 'φ' : 'λ'}</label>
-                                    <input type="range" min={-Math.PI} max={Math.PI} step={0.01} value={params[key]} onChange={e => handleSliderChange(key, e.target.value)} />
+                                    <input type="range" min={-Math.PI} max={Math.PI} step={0.001} value={params[key]} onChange={e => handleSliderChange(key, e.target.value)} />
                                     <span className="slider-value">{toPiNotation(params[key])}</span>
                                 </div>
                             ))}

@@ -175,8 +175,19 @@
 .circuit-gate.selected {
     background: var(--gate-color);
     color: #0d1117;
-    box-shadow: 0 0 16px var(--gate-color), 0 0 24px var(--gate-color);
+    box-shadow: 0 0 8px var(--gate-color), 0 0 12px var(--gate-color);
     z-index: 25;
+}
+
+/* Fix glow cutoff */
+.circuit-cell {
+    overflow: visible;
+}
+
+/* Active green lines during animation */
+.qubit-track.animating {
+    background: linear-gradient(90deg, #30363d, #3fb950 20%, #3fb950 80%, #30363d);
+    box-shadow: 0 0 6px rgba(63, 185, 80, 0.4);
 }
 
 .circuit-gate.dragging {
@@ -281,11 +292,11 @@
 
 .barrier-line.highlighted {
     background: repeating-linear-gradient(to bottom,
-            #f0883e 0px,
-            #f0883e 4px,
+            #3fb950 0px,
+            #3fb950 4px,
             transparent 4px,
             transparent 8px);
-    box-shadow: 0 0 8px rgba(240, 136, 62, 0.5);
+    box-shadow: 0 0 8px rgba(63, 185, 80, 0.5);
 }
 
 /* Barrier indicator while dragging */

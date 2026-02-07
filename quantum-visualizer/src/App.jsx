@@ -201,6 +201,7 @@ function App() {
 
     setAnimationFrame(-1);
     setIsPlaying(false);
+    setSelectedGate({ qubitIndex: qi, slotIndex: si, gate });
   }, [circuits]);
 
   const handleRemoveGate = useCallback((qi, si) => {
@@ -395,7 +396,7 @@ function App() {
               isPlaying={isPlaying}
               segmentDurations={segmentDurations}
               onFrameChange={setAnimationFrame}
-              onPlayPause={setIsPlaying}
+              onPlayPause={(playing) => { if (playing) setSelectedGate(null); setIsPlaying(playing); }}
               onReset={() => { setAnimationFrame(-1); setIsPlaying(false); }}
             />
             <ProbabilityBars probabilities={probabilities} allProbabilities={allProbabilities} />

@@ -67,20 +67,10 @@
 .segment {
     height: 100%;
     background: #30363d;
-    transition: background 0.3s ease;
-}
-
-/* First segment rounded left, last rounded right */
-.segment:first-child {
-    border-radius: 3px 0 0 3px;
-}
-
-.segment:last-child {
-    border-radius: 0 3px 3px 0;
-}
-
-.segment:only-child {
     border-radius: 3px;
+    position: relative;
+    overflow: hidden;
+    transition: background 0.3s ease;
 }
 
 .segment.completed {
@@ -88,8 +78,28 @@
 }
 
 .segment.animating {
-    background: linear-gradient(90deg, #58a6ff, #a371f7);
-    animation: pulse 0.5s ease-in-out infinite;
+    background: #238636;
+}
+
+.segment.animating::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 0%;
+    background: #3fb950;
+    animation: fillSegment 1s linear forwards;
+}
+
+@keyframes fillSegment {
+    from {
+        width: 0%;
+    }
+
+    to {
+        width: 100%;
+    }
 }
 
 @keyframes pulse {

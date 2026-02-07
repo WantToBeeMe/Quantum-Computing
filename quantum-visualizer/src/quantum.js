@@ -35,7 +35,7 @@ export const createU3Matrix = (theta, phi, lambda) => [
     [cScale(cFromPolar(1, phi), Math.sin(theta / 2)), cScale(cFromPolar(1, phi + lambda), Math.cos(theta / 2))]
 ];
 
-// New colors: X=blue, Y=green, Z/S/T=purple, H=red, U=yellow
+// Gate colors: I/X=Green (X-axis), Y=Purple (Y-axis), Z/S/T=Blue (Z-axis)
 // animDuration: relative animation time (0-1 scale, π rotation ≈ 1)
 export const GATES = {
     I: {
@@ -43,7 +43,7 @@ export const GATES = {
         label: 'I',
         description: 'Identity - does nothing',
         matrix: [[complex(1), complex(0)], [complex(0), complex(1)]],
-        color: '#58a6ff', // Blue like X
+        color: '#3fb950', // Green
         decomposition: null,
         rotation: null,
         animDuration: 0 // No animation
@@ -53,7 +53,7 @@ export const GATES = {
         label: 'X',
         description: 'Pauli-X (NOT) - π rotation around X axis',
         matrix: [[complex(0), complex(1)], [complex(1), complex(0)]],
-        color: '#58a6ff', // Blue
+        color: '#3fb950', // Green
         decomposition: { gate: 'U', params: { theta: Math.PI, phi: 0, lambda: Math.PI } },
         rotation: { axis: 'x', angle: Math.PI },
         animDuration: 1 // Full π rotation
@@ -63,7 +63,7 @@ export const GATES = {
         label: 'Y',
         description: 'Pauli-Y - π rotation around Y axis',
         matrix: [[complex(0), complex(0, -1)], [complex(0, 1), complex(0)]],
-        color: '#3fb950', // Green
+        color: '#a371f7', // Purple
         decomposition: { gate: 'U', params: { theta: Math.PI, phi: Math.PI / 2, lambda: Math.PI / 2 } },
         rotation: { axis: 'y', angle: Math.PI },
         animDuration: 1
@@ -73,7 +73,7 @@ export const GATES = {
         label: 'Z',
         description: 'Pauli-Z - π rotation around Z axis (phase flip)',
         matrix: [[complex(1), complex(0)], [complex(0), complex(-1)]],
-        color: '#a371f7', // Purple
+        color: '#58a6ff', // Blue
         decomposition: { gate: 'U', params: { theta: 0, phi: 0, lambda: Math.PI } },
         rotation: { axis: 'z', angle: Math.PI },
         animDuration: 1
@@ -93,7 +93,7 @@ export const GATES = {
         label: 'S',
         description: 'S gate - π/2 rotation around Z axis',
         matrix: [[complex(1), complex(0)], [complex(0), complex(0, 1)]],
-        color: '#a371f7', // Purple
+        color: '#58a6ff', // Blue
         decomposition: { gate: 'U', params: { theta: 0, phi: 0, lambda: Math.PI / 2 } },
         rotation: { axis: 'z', angle: Math.PI / 2 },
         animDuration: 0.5
@@ -103,7 +103,7 @@ export const GATES = {
         label: 'T',
         description: 'T gate - π/4 rotation around Z axis',
         matrix: [[complex(1), complex(0)], [complex(0), cFromPolar(1, Math.PI / 4)]],
-        color: '#a371f7', // Purple
+        color: '#58a6ff', // Blue
         decomposition: { gate: 'U', params: { theta: 0, phi: 0, lambda: Math.PI / 4 } },
         rotation: { axis: 'z', angle: Math.PI / 4 },
         animDuration: 0.25

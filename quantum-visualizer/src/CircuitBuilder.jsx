@@ -218,7 +218,7 @@ export default function CircuitBuilder({
                         >
                             {/* Qubit track lines */}
                             {circuits.map((_, qi) => (
-                                <div key={qi} className="qubit-track" style={{ '--row': qi }} />
+                                <div key={qi} className={`qubit-track ${isPlaying ? 'animating' : ''}`} style={{ '--row': qi }} />
                             ))}
 
                             {/* Control lines (SVG underneath) */}

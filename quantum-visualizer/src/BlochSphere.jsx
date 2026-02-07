@@ -37,19 +37,26 @@ const getTargetVector = (rotations) => {
     return v;
 };
 
-// Animated state arrow with delta animation
+// Animated state arrow with delta animation + phase visualization
 function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = false, isNewBranch = false }) {
     const [displayVec, setDisplayVec] = useState(() => new THREE.Vector3(0, 1, 0));
+    const [displayLambda, setDisplayLambda] = useState(0); // Track accumulated lambda
     const [currentOpacity, setCurrentOpacity] = useState(isNewBranch ? 0 : opacity);
 
     // Track animation state
-    const animatedRotationCount = useRef(0); // How many rotations we've fully animated
-    const currentRotationProgress = useRef(0); // Progress through current rotation (0-1)
-    const baseVec = useRef(new THREE.Vector3(0, 1, 0)); // Vector at start of current rotation
-    const prevRotationsSignature = useRef(''); // To detect rotation changes
-    const isSnapping = useRef(false); // True when we should snap (not animate)
-    const wasPlayMode = useRef(false); // Track play mode changes
-    const playStarted = useRef(false); // Track if we've started playing
+    const animatedRotationCount = useRef(0);
+    const currentRotationProgress = useRef(0);
+    const baseVec = useRef(new THREE.Vector3(0, 1, 0));
+    const baseLambda = useRef(0);
+    const prevRotationsSignature = useRef('');
+    const isSnapping = useRef(false);
+    const wasPlayMode = useRef(false);
+    const playStarted = useRef(false);
+
+    // Compute target lambda from rotations (sum of all z-axis angles)
+    const getTargetLambda = (rots) => {
+        return rots.filter(r => r.axis === 'z').reduce((acc, r) => acc + r.angle, 0);
+    };
 
     // Generate signature for rotations array
     const getRotationSignature = (rots) => {
@@ -62,22 +69,19 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
         const newSignature = getRotationSignature(rotations);
         const oldSignature = prevRotationsSignature.current;
 
-        // Detect play mode start (transition from not playing to playing)
         if (isPlayMode && !wasPlayMode.current) {
-            // Just started playing - reset to start
             baseVec.current = new THREE.Vector3(0, 1, 0);
+            baseLambda.current = 0;
             setDisplayVec(new THREE.Vector3(0, 1, 0));
+            setDisplayLambda(0);
             animatedRotationCount.current = 0;
             currentRotationProgress.current = 0;
             isSnapping.current = false;
             playStarted.current = true;
         } else if (isPlayMode && wasPlayMode.current && newSignature !== oldSignature) {
-            // During play, rotations changed (new frame with more gates)
-            // Treat as extension: animate only new rotations from current position
             const oldRots = oldSignature.split('|').filter(s => s);
             const newRots = newSignature.split('|').filter(s => s);
 
-            // Only animate new rotations if this is an extension
             let isExtension = true;
             for (let i = 0; i < Math.min(oldRots.length, newRots.length); i++) {
                 if (oldRots[i] !== newRots[i]) {
@@ -87,19 +91,15 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
             }
 
             if (isExtension && newRots.length > oldRots.length) {
-                // Extension: continue from where we are
                 animatedRotationCount.current = oldRots.length;
                 currentRotationProgress.current = 0;
             } else if (newRots.length < oldRots.length) {
-                // Fewer rotations (shouldn't happen during normal play)
                 isSnapping.current = true;
             }
         } else if (!isPlayMode && newSignature !== oldSignature) {
-            // Not playing - circuit editing: determine delta
             const oldRots = oldSignature.split('|').filter(s => s);
             const newRots = newSignature.split('|').filter(s => s);
 
-            // Check if new rotations are an extension of old (just added gates)
             let isExtension = true;
             for (let i = 0; i < Math.min(oldRots.length, newRots.length); i++) {
                 if (oldRots[i] !== newRots[i]) {
@@ -109,15 +109,13 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
             }
 
             if (isExtension && newRots.length > oldRots.length) {
-                // Extension: animate only new rotations
                 animatedRotationCount.current = oldRots.length;
                 currentRotationProgress.current = 0;
             } else if (isExtension && newRots.length < oldRots.length) {
-                // Removed gates: smooth lerp
                 isSnapping.current = true;
             } else {
-                // Parameters changed: smooth lerp to new position
                 baseVec.current = displayVec.clone();
+                baseLambda.current = displayLambda;
                 isSnapping.current = true;
             }
         }
@@ -127,48 +125,54 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
     }, [rotations, isPlayMode]);
 
     useFrame((_, delta) => {
-        const speed = delta * 3; // Slower animation to match segment timing
+        const speed = delta * 3;
         const targetVec = getTargetVector(rotations);
+        const targetLambda = getTargetLambda(rotations);
 
         if (isSnapping.current) {
-            // Smooth lerp to target
             const newVec = displayVec.clone().lerp(targetVec, Math.min(speed * 2, 0.15));
+            const lambdaDiff = targetLambda - displayLambda;
             setDisplayVec(newVec);
-            if (displayVec.distanceTo(targetVec) < 0.01) {
+            setDisplayLambda(prev => prev + lambdaDiff * Math.min(speed * 2, 0.15));
+            if (displayVec.distanceTo(targetVec) < 0.01 && Math.abs(lambdaDiff) < 0.01) {
                 setDisplayVec(targetVec);
+                setDisplayLambda(targetLambda);
                 baseVec.current = targetVec.clone();
+                baseLambda.current = targetLambda;
                 animatedRotationCount.current = rotations.length;
                 currentRotationProgress.current = 0;
                 isSnapping.current = false;
             }
         } else if (rotations.length > 0 && animatedRotationCount.current < rotations.length) {
-            // Animate through remaining rotations
             const rotIdx = animatedRotationCount.current;
             const rot = rotations[rotIdx];
             currentRotationProgress.current += speed;
 
             if (currentRotationProgress.current >= 1) {
-                // Complete this rotation
                 baseVec.current = applyRotation(baseVec.current, rot.axis, rot.angle);
+                if (rot.axis === 'z') baseLambda.current += rot.angle;
                 setDisplayVec(baseVec.current.clone());
+                setDisplayLambda(baseLambda.current);
                 animatedRotationCount.current++;
                 currentRotationProgress.current = 0;
             } else {
-                // Interpolate rotation
                 const partialAngle = rot.angle * currentRotationProgress.current;
                 const partialVec = applyRotation(baseVec.current, rot.axis, partialAngle);
                 setDisplayVec(partialVec);
+                if (rot.axis === 'z') {
+                    setDisplayLambda(baseLambda.current + partialAngle);
+                }
             }
         } else if (rotations.length === 0) {
-            // No rotations - should be at |0⟩
             const zeroVec = new THREE.Vector3(0, 1, 0);
             if (displayVec.distanceTo(zeroVec) > 0.01) {
-                const newVec = displayVec.clone().lerp(zeroVec, Math.min(speed * 2, 0.15));
-                setDisplayVec(newVec);
+                setDisplayVec(displayVec.clone().lerp(zeroVec, Math.min(speed * 2, 0.15)));
+            }
+            if (Math.abs(displayLambda) > 0.01) {
+                setDisplayLambda(prev => prev * 0.9);
             }
         }
 
-        // Animate opacity
         const opDiff = opacity - currentOpacity;
         if (Math.abs(opDiff) > 0.01) {
             setCurrentOpacity(prev => prev + opDiff * Math.min(speed * 3, 0.15));
@@ -185,22 +189,65 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
         return q;
     }, [direction.x, direction.y, direction.z]);
 
+    // Stick points to |-⟩ (local -X) when lambda=0, rotates around vector with lambda
     const stickEnd = useMemo(() => {
-        let perp = new THREE.Vector3(0, 1, 0).cross(direction);
-        if (perp.length() < 0.1) perp = new THREE.Vector3(1, 0, 0);
-        perp.normalize().multiplyScalar(0.1);
+        // Get local -X axis in world coordinates, then rotate by lambda around the direction
+        let localMinusX = new THREE.Vector3(-1, 0, 0).applyQuaternion(quaternion);
+        // Rotate around the state vector by displayLambda
+        localMinusX.applyAxisAngle(direction, displayLambda);
+        localMinusX.normalize().multiplyScalar(0.12);
         const base = direction.clone().multiplyScalar(0.65);
-        return [[base.x, base.y, base.z], [base.x + perp.x, base.y + perp.y, base.z + perp.z]];
+        return [[base.x, base.y, base.z], [base.x + localMinusX.x, base.y + localMinusX.y, base.z + localMinusX.z]];
+    }, [direction.x, direction.y, direction.z, displayLambda, quaternion]);
+
+    // Phase arc: shows accumulated lambda (mod 2π), purple curved line
+    const arcPoints = useMemo(() => {
+        // Wrap to 0-2π range for display
+        let arcAngle = displayLambda % (2 * Math.PI);
+        if (arcAngle < 0) arcAngle += 2 * Math.PI;
+        if (arcAngle < 0.05) return null; // Don't show tiny arcs
+
+        const points = [];
+        const segments = 32;
+        const radius = 0.12;
+
+        for (let i = 0; i <= segments; i++) {
+            const t = (i / segments) * arcAngle;
+            // Start from |-⟩ direction (local -X), sweep in lambda direction
+            const angle = Math.PI + t; // π is the -X direction in the XZ plane
+            points.push([radius * Math.cos(angle), 0, radius * Math.sin(angle)]);
+        }
+        return points;
+    }, [displayLambda]);
+
+    // Arc position and orientation - orbits the state vector
+    const arcQuaternion = useMemo(() => {
+        return quaternion.clone();
+    }, [quaternion]);
+
+    const arcPosition = useMemo(() => {
+        const base = direction.clone().multiplyScalar(0.65);
+        return [base.x, base.y, base.z];
     }, [direction.x, direction.y, direction.z]);
 
     return (
         <group>
+            {/* Main State Arrow */}
             <Line points={[[0, 0, 0], [displayVec.x * 0.75, displayVec.y * 0.75, displayVec.z * 0.75]]} color="#00ff88" lineWidth={3} transparent opacity={currentOpacity} />
             <mesh position={position} quaternion={quaternion}>
                 <coneGeometry args={[0.06, 0.15, 12]} />
                 <meshStandardMaterial color="#00ff88" emissive="#00ff88" emissiveIntensity={0.4} transparent opacity={currentOpacity} />
             </mesh>
-            <Line points={stickEnd} color="#00ff88" lineWidth={2} transparent opacity={currentOpacity * 0.7} />
+
+            {/* Purple Stick Indicator - points to |-⟩ and rotates with lambda */}
+            <Line points={stickEnd} color="#a371f7" lineWidth={3} transparent opacity={currentOpacity} />
+
+            {/* Purple Phase Arc - shows accumulated lambda rotation */}
+            {arcPoints && (
+                <group position={arcPosition} quaternion={arcQuaternion}>
+                    <Line points={arcPoints} color="#a371f7" lineWidth={2} transparent opacity={currentOpacity * 0.8} />
+                </group>
+            )}
         </group>
     );
 }
