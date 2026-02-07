@@ -113,13 +113,16 @@ function App() {
 
         if (params) {
           const theta = params.theta || 0;
+          const phi = params.phi || 0;
           const lambda = params.lambda || 0;
+          // Total phase is phi + lambda (both are Z-rotations in U-gate decomposition)
+          const totalPhase = phi + lambda;
           const hasTheta = Math.abs(theta) > 0.01;
-          const hasLambda = Math.abs(lambda) > 0.01;
-          if (hasTheta || hasLambda) {
+          const hasPhase = Math.abs(totalPhase) > 0.01;
+          if (hasTheta || hasPhase) {
             rotations.push({
               theta: hasTheta ? theta : 0,
-              lambda: hasLambda ? lambda : 0,
+              lambda: hasPhase ? totalPhase : 0, // Combined phase (phi + lambda)
               isCompound: true
             });
           }
