@@ -191,33 +191,33 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
             currentRotationProgress.current += speed;
 
             if (rot.isCompound) {
-                // Compound rotation: apply in order lambda -> theta (animated) -> phi
+                // Compound rotation: animate theta, phi, and lambda all simultaneously
                 // U = Rz(phi) * Ry(theta) * Rz(lambda)
-                const partialT = Math.min(currentRotationProgress.current, 1);
-                const partialTheta = (rot.theta || 0) * partialT;
-                const fullLambda = rot.lambda || 0;
-                const fullPhi = rot.phi || 0;
+                const progress = Math.min(currentRotationProgress.current, 1);
+                const partialTheta = (rot.theta || 0) * progress;
+                const partialLambda = (rot.lambda || 0) * progress;
+                const partialPhi = (rot.phi || 0) * progress;
 
-                // Apply rotations from base: lambda -> theta -> phi
+                // Apply partial rotations from base: lambda -> theta -> phi
                 let newVec = baseVec.current.clone();
-                if (Math.abs(fullLambda) > 0.01) {
-                    newVec = applyRotation(newVec, 'z', fullLambda);
+                if (Math.abs(partialLambda) > 0.01) {
+                    newVec = applyRotation(newVec, 'z', partialLambda);
                 }
-                if (Math.abs(rot.theta || 0) > 0.01) {
+                if (Math.abs(partialTheta) > 0.01) {
                     newVec = applyRotation(newVec, 'y', partialTheta);
                 }
-                if (Math.abs(fullPhi) > 0.01) {
-                    newVec = applyRotation(newVec, 'z', fullPhi);
+                if (Math.abs(partialPhi) > 0.01) {
+                    newVec = applyRotation(newVec, 'z', partialPhi);
                 }
                 setDisplayVec(newVec);
-                setDisplayLambda(baseLambda.current + fullLambda);
-                setDisplayPhi(basePhi.current + fullPhi);
+                setDisplayLambda(baseLambda.current + partialLambda);
+                setDisplayPhi(basePhi.current + partialPhi);
 
                 if (currentRotationProgress.current >= 1) {
                     // Complete this compound rotation
                     baseVec.current = newVec.clone();
-                    baseLambda.current += fullLambda;
-                    basePhi.current += fullPhi;
+                    baseLambda.current += (rot.lambda || 0);
+                    basePhi.current += (rot.phi || 0);
                     animatedRotationCount.current++;
                     currentRotationProgress.current = 0;
                 }
