@@ -57,25 +57,33 @@ const getTargetVector = (rotations) => {
 // Animated state arrow with delta animation + phase visualization
 function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = false, isNewBranch = false, depthOffset = 0 }) {
     const [displayVec, setDisplayVec] = useState(() => new THREE.Vector3(0, 1, 0));
-    const [displayLambda, setDisplayLambda] = useState(0); // Track accumulated lambda
+    const [displayLambda, setDisplayLambda] = useState(0); // Track accumulated lambda (blue stick)
+    const [displayPhi, setDisplayPhi] = useState(0); // Track accumulated phi (magenta stick)
     const [currentOpacity, setCurrentOpacity] = useState(isNewBranch ? 0 : opacity);
-
-    // Shorten arrow for overlapping vectors (each offset level shortens by 0.12)
 
     // Track animation state
     const animatedRotationCount = useRef(0);
     const currentRotationProgress = useRef(0);
     const baseVec = useRef(new THREE.Vector3(0, 1, 0));
     const baseLambda = useRef(0);
+    const basePhi = useRef(0);
     const prevRotationsSignature = useRef('');
     const isSnapping = useRef(false);
     const wasPlayMode = useRef(false);
     const playStarted = useRef(false);
 
-    // Compute total phase from rotations (phi + lambda for compound, or z-axis angles)
+    // Compute lambda phase from rotations (only lambda values)
     const getTargetLambda = (rots) => {
         return rots.reduce((acc, r) => {
-            if (r.isCompound) return acc + (r.phi || 0) + (r.lambda || 0);
+            if (r.isCompound) return acc + (r.lambda || 0);
+            return acc;
+        }, 0);
+    };
+
+    // Compute phi phase from rotations (only phi values and z-axis rotations)
+    const getTargetPhi = (rots) => {
+        return rots.reduce((acc, r) => {
+            if (r.isCompound) return acc + (r.phi || 0);
             if (r.axis === 'z') return acc + r.angle;
             return acc;
         }, 0);
@@ -98,8 +106,10 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
         if (isPlayMode && !wasPlayMode.current) {
             baseVec.current = new THREE.Vector3(0, 1, 0);
             baseLambda.current = 0;
+            basePhi.current = 0;
             setDisplayVec(new THREE.Vector3(0, 1, 0));
             setDisplayLambda(0);
+            setDisplayPhi(0);
             animatedRotationCount.current = 0;
             currentRotationProgress.current = 0;
             isSnapping.current = false;
@@ -142,6 +152,7 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
             } else {
                 baseVec.current = displayVec.clone();
                 baseLambda.current = displayLambda;
+                basePhi.current = displayPhi;
                 isSnapping.current = true;
             }
         }
@@ -154,17 +165,22 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
         const speed = delta * 3;
         const targetVec = getTargetVector(rotations);
         const targetLambda = getTargetLambda(rotations);
+        const targetPhi = getTargetPhi(rotations);
 
         if (isSnapping.current) {
             const newVec = displayVec.clone().lerp(targetVec, Math.min(speed * 2, 0.15));
             const lambdaDiff = targetLambda - displayLambda;
+            const phiDiff = targetPhi - displayPhi;
             setDisplayVec(newVec);
             setDisplayLambda(prev => prev + lambdaDiff * Math.min(speed * 2, 0.15));
-            if (displayVec.distanceTo(targetVec) < 0.01 && Math.abs(lambdaDiff) < 0.01) {
+            setDisplayPhi(prev => prev + phiDiff * Math.min(speed * 2, 0.15));
+            if (displayVec.distanceTo(targetVec) < 0.01 && Math.abs(lambdaDiff) < 0.01 && Math.abs(phiDiff) < 0.01) {
                 setDisplayVec(targetVec);
                 setDisplayLambda(targetLambda);
+                setDisplayPhi(targetPhi);
                 baseVec.current = targetVec.clone();
                 baseLambda.current = targetLambda;
+                basePhi.current = targetPhi;
                 animatedRotationCount.current = rotations.length;
                 currentRotationProgress.current = 0;
                 isSnapping.current = false;
@@ -181,7 +197,6 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
                 const partialTheta = (rot.theta || 0) * partialT;
                 const fullLambda = rot.lambda || 0;
                 const fullPhi = rot.phi || 0;
-                const totalPhase = fullLambda + fullPhi;
 
                 // Apply rotations from base: lambda -> theta -> phi
                 let newVec = baseVec.current.clone();
@@ -195,12 +210,14 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
                     newVec = applyRotation(newVec, 'z', fullPhi);
                 }
                 setDisplayVec(newVec);
-                setDisplayLambda(baseLambda.current + totalPhase);
+                setDisplayLambda(baseLambda.current + fullLambda);
+                setDisplayPhi(basePhi.current + fullPhi);
 
                 if (currentRotationProgress.current >= 1) {
                     // Complete this compound rotation
                     baseVec.current = newVec.clone();
-                    baseLambda.current += totalPhase;
+                    baseLambda.current += fullLambda;
+                    basePhi.current += fullPhi;
                     animatedRotationCount.current++;
                     currentRotationProgress.current = 0;
                 }
@@ -208,9 +225,9 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
                 // Simple single-axis rotation
                 if (currentRotationProgress.current >= 1) {
                     baseVec.current = applyRotation(baseVec.current, rot.axis, rot.angle);
-                    if (rot.axis === 'z') baseLambda.current += rot.angle;
+                    if (rot.axis === 'z') basePhi.current += rot.angle;
                     setDisplayVec(baseVec.current.clone());
-                    setDisplayLambda(baseLambda.current);
+                    setDisplayPhi(basePhi.current);
                     animatedRotationCount.current++;
                     currentRotationProgress.current = 0;
                 } else {
@@ -218,7 +235,7 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
                     const partialVec = applyRotation(baseVec.current, rot.axis, partialAngle);
                     setDisplayVec(partialVec);
                     if (rot.axis === 'z') {
-                        setDisplayLambda(baseLambda.current + partialAngle);
+                        setDisplayPhi(basePhi.current + partialAngle);
                     }
                 }
             }
@@ -229,6 +246,9 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
             }
             if (Math.abs(displayLambda) > 0.01) {
                 setDisplayLambda(prev => prev * 0.9);
+            }
+            if (Math.abs(displayPhi) > 0.01) {
+                setDisplayPhi(prev => prev * 0.9);
             }
         }
 
@@ -241,11 +261,14 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
     const direction = displayVec.clone().normalize();
     // Shorten arrow for overlapping vectors: each offset level shortens by 0.12
     const shortenFactor = Math.max(0.3, 1 - depthOffset * 0.15);
-    const baseArrowLen = 0.88;
+    const baseArrowLen = 0.94;
     const arrowLen = baseArrowLen * shortenFactor;
-    const lineLen = 0.78 * shortenFactor;
-    const stickPos = 0.70 * shortenFactor;
-    const arcPos = 0.70 * shortenFactor;
+    const lineLen = 0.9 * shortenFactor; // Extended to touch cone base
+    const coneHeight = 0.07; // Taller cone
+    const coneRadius = 0.035; // Smaller cone radius
+    const phiStickPos = (lineLen + arrowLen) / 2; // At bottom of cone head
+    const lambdaStickPos = 0.50 * shortenFactor; // Lower on the vector
+    const arcPos = phiStickPos; // Arc at same position as phi stick
     const position = [displayVec.x * arrowLen, displayVec.y * arrowLen, displayVec.z * arrowLen];
 
     const quaternion = useMemo(() => {
@@ -254,23 +277,29 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
         return q;
     }, [direction.x, direction.y, direction.z]);
 
-    // Stick points to |-⟩ (local -X) when lambda=0, rotates around vector with lambda
-    const stickEnd = useMemo(() => {
-        // Get local -X axis in world coordinates, then rotate by lambda around the direction
+    // Lambda stick: blue, points to |-⟩ (local -X), rotates with lambda only
+    const lambdaStickEnd = useMemo(() => {
         let localMinusX = new THREE.Vector3(-1, 0, 0).applyQuaternion(quaternion);
-        // Rotate around the state vector by displayLambda
         localMinusX.applyAxisAngle(direction, displayLambda);
         localMinusX.normalize().multiplyScalar(0.10);
-        const base = direction.clone().multiplyScalar(stickPos); // At base of cone
+        const base = direction.clone().multiplyScalar(lambdaStickPos);
         return [[base.x, base.y, base.z], [base.x + localMinusX.x, base.y + localMinusX.y, base.z + localMinusX.z]];
-    }, [direction.x, direction.y, direction.z, displayLambda, quaternion, stickPos]);
+    }, [direction.x, direction.y, direction.z, displayLambda, quaternion, lambdaStickPos]);
 
-    // Phase arc: shows accumulated lambda (mod 2π), purple curved line
-    const arcPoints = useMemo(() => {
-        // Wrap to 0-2π range for display
-        let arcAngle = displayLambda % (2 * Math.PI);
+    // Phi stick: magenta, points to |-⟩, rotates with phi only
+    const phiStickEnd = useMemo(() => {
+        let localMinusX = new THREE.Vector3(-1, 0, 0).applyQuaternion(quaternion);
+        localMinusX.applyAxisAngle(direction, displayPhi);
+        localMinusX.normalize().multiplyScalar(0.10);
+        const base = direction.clone().multiplyScalar(phiStickPos);
+        return [[base.x, base.y, base.z], [base.x + localMinusX.x, base.y + localMinusX.y, base.z + localMinusX.z]];
+    }, [direction.x, direction.y, direction.z, displayPhi, quaternion, phiStickPos]);
+
+    // Phi arc: shows accumulated phi rotation (magenta curved line)
+    const phiArcPoints = useMemo(() => {
+        let arcAngle = displayPhi % (2 * Math.PI);
         if (arcAngle < 0) arcAngle += 2 * Math.PI;
-        if (arcAngle < 0.05) return null; // Don't show tiny arcs
+        if (arcAngle < 0.05) return null;
 
         const points = [];
         const segments = 32;
@@ -278,14 +307,13 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
 
         for (let i = 0; i <= segments; i++) {
             const t = (i / segments) * arcAngle;
-            // Start from |-⟩ direction (local -X), sweep in same direction as stick rotation
-            const angle = Math.PI - t; // Flip direction: π - t instead of π + t
+            const angle = Math.PI - t;
             points.push([radius * Math.cos(angle), 0, radius * Math.sin(angle)]);
         }
         return points;
-    }, [displayLambda]);
+    }, [displayPhi]);
 
-    // Arc position and orientation - orbits the state vector
+    // Arc position and orientation - orbits the state vector at phi stick position
     const arcQuaternion = useMemo(() => {
         return quaternion.clone();
     }, [quaternion]);
@@ -297,20 +325,24 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
 
     return (
         <group>
-            {/* Main State Arrow */}
+            {/* Main State Arrow - extended green stick to touch cone */}
             <Line points={[[0, 0, 0], [displayVec.x * lineLen, displayVec.y * lineLen, displayVec.z * lineLen]]} color="#00ff88" lineWidth={3} transparent opacity={currentOpacity} />
+            {/* Arrow head - taller and smaller */}
             <mesh position={position} quaternion={quaternion}>
-                <coneGeometry args={[0.04, 0.10, 12]} />
+                <coneGeometry args={[coneRadius, coneHeight, 12]} />
                 <meshStandardMaterial color="#00ff88" emissive="#00ff88" emissiveIntensity={0.4} transparent opacity={currentOpacity} />
             </mesh>
 
-            {/* Darker Purple Stick Indicator - at base of cone, rotates with total phase */}
-            <Line points={stickEnd} color="#7c3aed" lineWidth={3} transparent opacity={currentOpacity} />
+            {/* Blue Lambda Stick - lower on vector, shows lambda phase */}
+            <Line points={lambdaStickEnd} color="#3b82f6" lineWidth={3} transparent opacity={currentOpacity * 0.8} />
 
-            {/* Dark Purple Phase Arc - shows accumulated lambda rotation */}
-            {arcPoints && (
+            {/* Magenta Phi Stick - at base of cone, shows phi phase */}
+            <Line points={phiStickEnd} color="#d946ef" lineWidth={3} transparent opacity={currentOpacity} />
+
+            {/* Magenta Phi Arc - shows accumulated phi rotation */}
+            {phiArcPoints && (
                 <group position={arcPosition} quaternion={arcQuaternion}>
-                    <Line points={arcPoints} color="#7c3aed" lineWidth={2} transparent opacity={currentOpacity * 0.8} />
+                    <Line points={phiArcPoints} color="#d946ef" lineWidth={2} transparent opacity={currentOpacity * 0.8} />
                 </group>
             )}
         </group>
