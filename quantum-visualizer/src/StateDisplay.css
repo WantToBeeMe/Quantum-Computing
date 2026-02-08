@@ -1,0 +1,62 @@
+.state-display {
+    background: #161b22;
+    border-radius: 10px;
+    padding: 12px;
+    border: 1px solid #30363d;
+}
+
+.state-display h4 {
+    margin: 0 0 10px 0;
+    color: #c9d1d9;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.state-equations {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.qubit-state-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 13px;
+}
+
+.qubit-label {
+    color: #58a6ff;
+    font-weight: 600;
+    min-width: 30px;
+}
+
+.state-equation {
+    color: #c9d1d9;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.coefficient {
+    color: #3fb950;
+}
+
+.ket {
+    color: #f0883e;
+    font-weight: 500;
+}
+
+.operator {
+    color: #8b949e;
+    margin: 0 2px;
+}
+
+.branch-indicator {
+    color: #a371f7;
+    font-size: 11px;
+    font-style: italic;
+}

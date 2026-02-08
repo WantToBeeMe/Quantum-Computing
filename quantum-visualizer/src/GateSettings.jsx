@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { GATES } from './quantum';
+import { GATES, createGateInstance, updateMatrixFromDecomposition, createU3Matrix } from './quantum';
 import './GateSettings.css';
 
 const parsePiNotation = (str) => {
@@ -31,13 +31,13 @@ const toPiNotation = (rad) => {
 };
 
 export default function GateSettings({ gate, gateIndex, qubitIndex, onRemove, onUpdate, numQubits }) {
-    const [isControlled, setIsControlled] = useState(gate?.controlQubit !== undefined);
-    const [controlQubit, setControlQubit] = useState(gate?.controlQubit ?? -1);
+    const [isControlled, setIsControlled] = useState(gate?.controlIndex !== undefined && gate?.controlIndex !== null);
+    const [controlQubit, setControlQubit] = useState(gate?.controlIndex ?? -1);
     const [useSliders, setUseSliders] = useState(false);
     const [params, setParams] = useState({
-        theta: gate?.params?.theta || 0,
-        phi: gate?.params?.phi || 0,
-        lambda: gate?.params?.lambda || 0
+        theta: gate?.decomposition?.theta || 0,
+        phi: gate?.decomposition?.phi || 0,
+        lambda: gate?.decomposition?.lambda || 0
     });
     const [paramStrings, setParamStrings] = useState({
         theta: toPiNotation(params.theta),
@@ -47,12 +47,12 @@ export default function GateSettings({ gate, gateIndex, qubitIndex, onRemove, on
 
     useEffect(() => {
         if (gate && !gate.isBarrier) {
-            setIsControlled(gate.controlQubit !== undefined);
-            setControlQubit(gate.controlQubit ?? -1);
+            setIsControlled(gate.controlIndex !== undefined && gate.controlIndex !== null);
+            setControlQubit(gate.controlIndex ?? -1);
             const newParams = {
-                theta: gate.params?.theta || 0,
-                phi: gate.params?.phi || 0,
-                lambda: gate.params?.lambda || 0
+                theta: gate.decomposition?.theta || 0,
+                phi: gate.decomposition?.phi || 0,
+                lambda: gate.decomposition?.lambda || 0
             };
             setParams(newParams);
             setParamStrings({
@@ -86,31 +86,35 @@ export default function GateSettings({ gate, gateIndex, qubitIndex, onRemove, on
     }
 
     const gateInfo = GATES[gate.gate] || gate;
-    const isParametric = gate.gate === 'U' || gateInfo.isParametric;
-    const hasDecomposition = gateInfo.decomposition !== null;
+    const isParametric = gate.gate === 'U' || gateInfo.showDecomposition;
+    const canDecompose = gate.gate !== 'U' && gateInfo.defaultDecomposition;
 
     const handleParamStringChange = (key, value) => setParamStrings(prev => ({ ...prev, [key]: value }));
 
     const handleParamBlur = (key) => {
         const parsed = parsePiNotation(paramStrings[key]);
-        const newParams = { ...params, [key]: parsed };
-        setParams(newParams);
-        onUpdate(qubitIndex, gateIndex, { ...gate, params: newParams });
+        const newDecomp = { ...params, [key]: parsed };
+        setParams(newDecomp);
+        // Sync matrix with decomposition
+        const newMatrix = createU3Matrix(newDecomp.theta, newDecomp.phi, newDecomp.lambda);
+        onUpdate(qubitIndex, gateIndex, { ...gate, decomposition: newDecomp, matrix: newMatrix });
     };
 
     const handleSliderChange = (key, value) => {
         const numValue = parseFloat(value);
-        const newParams = { ...params, [key]: numValue };
-        setParams(newParams);
+        const newDecomp = { ...params, [key]: numValue };
+        setParams(newDecomp);
         setParamStrings(prev => ({ ...prev, [key]: toPiNotation(numValue) }));
-        onUpdate(qubitIndex, gateIndex, { ...gate, params: newParams });
+        // Sync matrix with decomposition
+        const newMatrix = createU3Matrix(newDecomp.theta, newDecomp.phi, newDecomp.lambda);
+        onUpdate(qubitIndex, gateIndex, { ...gate, decomposition: newDecomp, matrix: newMatrix });
     };
 
     const handleControlChange = (checked) => {
         setIsControlled(checked);
         if (!checked) {
             setControlQubit(-1);
-            onUpdate(qubitIndex, gateIndex, { ...gate, controlQubit: undefined });
+            onUpdate(qubitIndex, gateIndex, { ...gate, controlIndex: null });
         }
     };
 
@@ -118,19 +122,20 @@ export default function GateSettings({ gate, gateIndex, qubitIndex, onRemove, on
         const ctrl = parseInt(value);
         setControlQubit(ctrl);
         if (ctrl >= 0) {
-            onUpdate(qubitIndex, gateIndex, { ...gate, controlQubit: ctrl });
+            onUpdate(qubitIndex, gateIndex, { ...gate, controlIndex: ctrl });
         }
     };
 
     const handleDecompose = () => {
-        if (gateInfo.decomposition) {
+        if (gateInfo.defaultDecomposition) {
+            // Switch to U gate, keep same matrix and decomposition
             onUpdate(qubitIndex, gateIndex, {
+                ...gate,
                 gate: 'U',
                 label: 'U',
-                params: gateInfo.decomposition.params,
                 color: GATES.U.color,
-                description: GATES.U.description,
-                controlQubit: gate.controlQubit // Keep controlled config
+                description: GATES.U.description
+                // matrix and decomposition stay the same
             });
         }
     };
@@ -156,13 +161,20 @@ export default function GateSettings({ gate, gateIndex, qubitIndex, onRemove, on
 
                     {useSliders ? (
                         <div className="param-sliders">
-                            {['theta', 'phi', 'lambda'].map(key => (
-                                <div key={key} className="slider-row">
-                                    <label>{key === 'theta' ? 'θ' : key === 'phi' ? 'φ' : 'λ'}</label>
-                                    <input type="range" min={-Math.PI} max={Math.PI} step={0.001} value={params[key]} onChange={e => handleSliderChange(key, e.target.value)} />
-                                    <span className="slider-value">{toPiNotation(params[key])}</span>
-                                </div>
-                            ))}
+                            {['theta', 'phi', 'lambda'].map(key => {
+                                const tooltips = {
+                                    theta: 'Tips the state vector away from the Z-axis (Y rotation)',
+                                    phi: 'Rotates around the Z-axis after tilting',
+                                    lambda: 'Rotates the starting point in XY plane before tilting'
+                                };
+                                return (
+                                    <div key={key} className="slider-row">
+                                        <label title={tooltips[key]}>{key === 'theta' ? 'θ' : key === 'phi' ? 'φ' : 'λ'}</label>
+                                        <input type="range" min={-Math.PI} max={Math.PI} step={0.001} value={params[key]} onChange={e => handleSliderChange(key, e.target.value)} />
+                                        <span className="slider-value">{toPiNotation(params[key])}</span>
+                                    </div>
+                                );
+                            })}
                         </div>
                     ) : (
                         <div className="param-grid">
@@ -200,7 +212,7 @@ export default function GateSettings({ gate, gateIndex, qubitIndex, onRemove, on
             )}
 
             <div className="settings-actions">
-                {hasDecomposition && <button className="action-btn decompose" onClick={handleDecompose}>→ U</button>}
+                {canDecompose && <button className="action-btn decompose" onClick={handleDecompose}>→ U</button>}
                 <button className="action-btn remove" onClick={() => onRemove(qubitIndex, gateIndex)}>Remove</button>
             </div>
         </div>

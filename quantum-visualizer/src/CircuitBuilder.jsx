@@ -225,8 +225,8 @@ export default function CircuitBuilder({
                             <svg className="control-lines-svg" style={{ width: slots.length * slotWidth, height: totalHeight }}>
                                 {circuits.map((row, qi) =>
                                     row.map((gate, si) => {
-                                        if (!gate || gate.controlQubit === undefined) return null;
-                                        const ctrlQ = gate.controlQubit;
+                                        if (!gate || gate.controlIndex === undefined || gate.controlIndex === null) return null;
+                                        const ctrlQ = gate.controlIndex;
                                         const gateY = qi * rowHeight + rowHeight / 2;
                                         const ctrlY = ctrlQ * rowHeight + rowHeight / 2;
                                         const gateX = si * slotWidth + slotWidth / 2;
@@ -306,7 +306,7 @@ export default function CircuitBuilder({
                                             onDragEnd={resetDragState}
                                             title={`${gate.label}\nDrag to move | Middle-click to remove`}
                                         >
-                                            {gate.controlQubit !== undefined && <span className="control-indicator">C</span>}
+                                            {gate.controlIndex !== undefined && gate.controlIndex !== null && <span className="control-indicator">C</span>}
                                             {gate.label}
                                         </div>
                                     );

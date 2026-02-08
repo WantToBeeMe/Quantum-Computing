@@ -5,10 +5,14 @@ import CircuitBuilder from './CircuitBuilder';
 import GateSettings from './GateSettings';
 import AnimationPlayer from './AnimationPlayer';
 import ProbabilityBars from './ProbabilityBars';
+import StateDisplay from './StateDisplay';
 import {
   STATE_ZERO,
   GATES,
   applyGate,
+  createGateInstance,
+  updateMatrixFromDecomposition,
+  extractRotationFromMatrix,
   getMultiQubitProbabilities,
   stateToBlochCoords,
   getProbabilities
@@ -16,7 +20,7 @@ import {
 import './App.css';
 
 function App() {
-  const [circuits, setCircuits] = useState([[]]);
+  const [circuits, setCircuits] = useState([[]]); // Each gate: { gate, matrix, decomposition, controlIndex }
   const [barriers, setBarriers] = useState([]);
   const [qubitVisibility, setQubitVisibility] = useState([true]);
   const [focusQubit, setFocusQubit] = useState(null);
@@ -49,13 +53,13 @@ function App() {
   // Frame 1 = gates before first barrier (slot index < barriers[0])
   // Frame 2 = gates before second barrier, etc.
   // Frame barrierCount+1 = all gates
-  // Returns array of {gate, slot} objects sorted by slot
+  // Returns array of gate objects sorted by slot
   const getOrderedGates = useCallback((qubitIndex, frame) => {
     const row = circuits[qubitIndex] || [];
     const sortedBarriers = [...barriers].sort((a, b) => a - b);
 
     // Get all gates with their slots
-    const entries = row.map((gate, slot) => ({ gate: { ...gate, slot }, slot })).filter(e => e.gate);
+    const entries = row.map((gate, slot) => ({ gate: gate ? { ...gate, slot } : null, slot })).filter(e => e.gate);
     entries.sort((a, b) => a.slot - b.slot);
 
     if (frame === 0) {
@@ -83,13 +87,12 @@ function App() {
     const frame = animationFrame < 0 ? totalFrames - 1 : animationFrame;
 
     // Helper to get control qubit state at a specific slot
-    const getControlStateAtSlot = (ctrlQubit, slot) => {
-      const ctrlGates = getOrderedGates(ctrlQubit, frame);
+    const getControlStateAtSlot = (ctrlQubit, maxSlot) => {
+      const ctrlGates = getOrderedGates(ctrlQubit, totalFrames - 1); // Get all gates
       let state = STATE_ZERO();
       for (const g of ctrlGates) {
-        // Only apply gates at slots BEFORE or EQUAL to the controlled gate's slot
-        if (g.slot <= slot) {
-          state = applyGate(state, GATES[g.gate] || g, g.params);
+        if (g.slot <= maxSlot && g.gate !== 'BARRIER') {
+          state = applyGate(state, g);
         }
       }
       return state;
@@ -97,81 +100,66 @@ function App() {
 
     return circuits.map((_, qi) => {
       const gates = getOrderedGates(qi, frame);
-      const controlledGate = gates.find(g => g.controlQubit !== undefined);
+      const controlledGate = gates.find(g => g.controlIndex !== undefined && g.controlIndex !== null);
       const hasControl = !!controlledGate;
 
-      // Calculate cumulative rotations - use U-gate decomposition for all gates
-      const rotations = [];
-      for (const gate of gates) {
-        const info = GATES[gate.gate] || gate;
-
-        // Use decomposition params if available, otherwise use direct params
-        let params = gate.params;
-        if (info.decomposition && info.decomposition.params) {
-          params = info.decomposition.params;
-        }
-
-        if (params) {
-          const theta = params.theta || 0;
-          const phi = params.phi || 0;
-          const lambda = params.lambda || 0;
-          // Total phase is phi + lambda (both are Z-rotations in U-gate decomposition)
-          const totalPhase = phi + lambda;
-          const hasTheta = Math.abs(theta) > 0.01;
-          const hasPhase = Math.abs(totalPhase) > 0.01;
-          if (hasTheta || hasPhase) {
-            rotations.push({
-              theta: hasTheta ? theta : 0,
-              lambda: hasPhase ? totalPhase : 0, // Combined phase (phi + lambda)
-              isCompound: true
-            });
+      // Build rotations from decomposition (for visualization)
+      const buildRotations = (gateList) => {
+        const rotations = [];
+        for (const gate of gateList) {
+          if (gate.gate === 'BARRIER') continue;
+          // Use decomposition directly - already stored on gate
+          const decomp = gate.decomposition;
+          if (decomp) {
+            const { theta, phi, lambda } = decomp;
+            const hasTheta = Math.abs(theta) > 0.01;
+            const hasPhi = Math.abs(phi) > 0.01;
+            const hasLambda = Math.abs(lambda) > 0.01;
+            if (hasTheta || hasPhi || hasLambda) {
+              rotations.push({ theta, phi, lambda, isCompound: true });
+            }
           }
         }
-      }
+        return rotations;
+      };
+
+      // Apply gates using matrix multiplication
+      const applyGates = (gateList, state) => {
+        for (const gate of gateList) {
+          if (gate.gate === 'BARRIER') continue;
+          state = applyGate(state, gate);
+        }
+        return state;
+      };
 
       if (!hasControl) {
         let state = STATE_ZERO();
-        for (const gate of gates) {
-          const info = GATES[gate.gate] || gate;
-          state = applyGate(state, info, gate.params);
-        }
+        state = applyGates(gates, state);
+        const rotations = buildRotations(gates);
         return [{ state, coords: stateToBlochCoords(state), probability: 1, rotations }];
       } else {
-        // Evaluate with slot-aware control: control state at the slot of the controlled gate
+        // Controlled gate handling
         const ctrlSlot = controlledGate.slot;
-        const ctrlIdx = controlledGate.controlQubit;
+        const ctrlIdx = controlledGate.controlIndex;
 
-        // Get control probability at the slot where the controlled gate is
-        const ctrlState = getControlStateAtSlot(ctrlIdx, ctrlSlot);
+        // Get control probability at the slot (not including this gate)
+        const ctrlState = getControlStateAtSlot(ctrlIdx, ctrlSlot - 1);
         const ctrlProb = getProbabilities(ctrlState).prob1;
 
-        // State if control is |0⟩ (don't apply controlled gates)
+        // State if control is |0⟩ (skip controlled gates)
+        const gatesWithoutControlled = gates.filter(g => g.controlIndex === undefined || g.controlIndex === null);
         let stateNo = STATE_ZERO();
-        for (const gate of gates) {
-          if (gate.controlQubit === undefined) {
-            const info = GATES[gate.gate] || gate;
-            stateNo = applyGate(stateNo, info, gate.params);
-          }
-        }
+        stateNo = applyGates(gatesWithoutControlled, stateNo);
+        const rotationsNo = buildRotations(gatesWithoutControlled);
 
-        // State if control is |1⟩ (apply all gates including controlled)
+        // State if control is |1⟩ (apply all gates)
         let stateWith = STATE_ZERO();
-        for (const gate of gates) {
-          const info = GATES[gate.gate] || gate;
-          stateWith = applyGate(stateWith, info, gate.params);
-        }
+        stateWith = applyGates(gates, stateWith);
+        const rotationsWith = buildRotations(gates);
 
         const branches = [];
-        const rotationsNo = [];
-        for (const gate of gates) {
-          if (gate.controlQubit === undefined) {
-            const info = GATES[gate.gate] || gate;
-            if (info.rotation) rotationsNo.push({ ...info.rotation });
-          }
-        }
-
         if (1 - ctrlProb > 0.01) branches.push({ state: stateNo, coords: stateToBlochCoords(stateNo), probability: 1 - ctrlProb, rotations: rotationsNo });
-        if (ctrlProb > 0.01) branches.push({ state: stateWith, coords: stateToBlochCoords(stateWith), probability: ctrlProb, rotations });
+        if (ctrlProb > 0.01) branches.push({ state: stateWith, coords: stateToBlochCoords(stateWith), probability: ctrlProb, rotations: rotationsWith });
         return branches.length > 0 ? branches : [{ state: stateNo, coords: stateToBlochCoords(stateNo), probability: 1, rotations: rotationsNo }];
       }
     });
@@ -264,9 +252,8 @@ function App() {
       if (!gate) return prev;
 
       // Remove control if moving to control qubit's row
-      if (gate.controlQubit !== undefined && gate.controlQubit === toQi) {
-        gate = { ...gate };
-        delete gate.controlQubit;
+      if (gate.controlIndex !== undefined && gate.controlIndex !== null && gate.controlIndex === toQi) {
+        gate = { ...gate, controlIndex: null };
       }
 
       // Remove from old position
@@ -305,16 +292,15 @@ function App() {
       // Clean up control configs: remove if control points to removed qubit, remap indices
       return next.map((row, newQi) =>
         row.map(gate => {
-          if (!gate || gate.controlQubit === undefined) return gate;
-          if (gate.controlQubit === qi) {
+          if (!gate || gate.controlIndex === undefined || gate.controlIndex === null) return gate;
+          if (gate.controlIndex === qi) {
             // Control was pointing to removed qubit - remove control
-            const { controlQubit, ...rest } = gate;
-            return rest;
+            return { ...gate, controlIndex: null };
           }
           // Remap control qubit index
           return {
             ...gate,
-            controlQubit: gate.controlQubit > qi ? gate.controlQubit - 1 : gate.controlQubit
+            controlIndex: gate.controlIndex > qi ? gate.controlIndex - 1 : gate.controlIndex
           };
         })
       );
@@ -413,6 +399,7 @@ function App() {
               onReset={() => { setAnimationFrame(-1); setIsPlaying(false); }}
             />
             <ProbabilityBars probabilities={probabilities} allProbabilities={allProbabilities} />
+            <StateDisplay qubitStates={qubitBranches} />
           </div>
         </div>
 

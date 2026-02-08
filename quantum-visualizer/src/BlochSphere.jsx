@@ -29,16 +29,23 @@ const applyRotation = (vec, axis, angle) => {
 };
 
 // Get target vector after applying all rotations
+// U-gate rotation is: Rz(phi) * Ry(theta) * Rz(lambda)
+// Applied to |0⟩ starting vector: first lambda (Z), then theta (Y), then phi (Z)
 const getTargetVector = (rotations) => {
     let v = new THREE.Vector3(0, 1, 0); // |0⟩
     for (const rot of rotations) {
         if (rot.isCompound) {
-            // Compound rotation: apply theta (Y) then lambda (Z)
+            // U-gate compound rotation: apply in order lambda -> theta -> phi
+            // Since U = Rz(phi) * Ry(theta) * Rz(lambda), we apply right-to-left to vector:
+            // First Rz(lambda), then Ry(theta), then Rz(phi)
+            if (Math.abs(rot.lambda || 0) > 0.01) {
+                v = applyRotation(v, 'z', rot.lambda);
+            }
             if (Math.abs(rot.theta || 0) > 0.01) {
                 v = applyRotation(v, 'y', rot.theta);
             }
-            if (Math.abs(rot.lambda || 0) > 0.01) {
-                v = applyRotation(v, 'z', rot.lambda);
+            if (Math.abs(rot.phi || 0) > 0.01) {
+                v = applyRotation(v, 'z', rot.phi);
             }
         } else {
             v = applyRotation(v, rot.axis, rot.angle);
@@ -48,10 +55,12 @@ const getTargetVector = (rotations) => {
 };
 
 // Animated state arrow with delta animation + phase visualization
-function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = false, isNewBranch = false }) {
+function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = false, isNewBranch = false, depthOffset = 0 }) {
     const [displayVec, setDisplayVec] = useState(() => new THREE.Vector3(0, 1, 0));
     const [displayLambda, setDisplayLambda] = useState(0); // Track accumulated lambda
     const [currentOpacity, setCurrentOpacity] = useState(isNewBranch ? 0 : opacity);
+
+    // Shorten arrow for overlapping vectors (each offset level shortens by 0.12)
 
     // Track animation state
     const animatedRotationCount = useRef(0);
@@ -63,20 +72,20 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
     const wasPlayMode = useRef(false);
     const playStarted = useRef(false);
 
-    // Compute target lambda from rotations (sum of all z-axis angles + compound lambda)
+    // Compute total phase from rotations (phi + lambda for compound, or z-axis angles)
     const getTargetLambda = (rots) => {
         return rots.reduce((acc, r) => {
-            if (r.isCompound) return acc + (r.lambda || 0);
+            if (r.isCompound) return acc + (r.phi || 0) + (r.lambda || 0);
             if (r.axis === 'z') return acc + r.angle;
             return acc;
         }, 0);
     };
 
-    // Generate signature for rotations array
+    // Generate signature for rotations array (include phi now)
     const getRotationSignature = (rots) => {
         if (!rots || rots.length === 0) return '';
         return rots.map(r => {
-            if (r.isCompound) return `c:${(r.theta || 0).toFixed(4)}:${(r.lambda || 0).toFixed(4)}`;
+            if (r.isCompound) return `c:${(r.theta || 0).toFixed(4)}:${(r.phi || 0).toFixed(4)}:${(r.lambda || 0).toFixed(4)}`;
             return `${r.axis}:${r.angle.toFixed(4)}`;
         }).join('|');
     };
@@ -166,28 +175,32 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
             currentRotationProgress.current += speed;
 
             if (rot.isCompound) {
-                // Compound rotation: animate theta (Y-axis), apply lambda (Z-axis) instantly
+                // Compound rotation: apply in order lambda -> theta (animated) -> phi
+                // U = Rz(phi) * Ry(theta) * Rz(lambda)
                 const partialT = Math.min(currentRotationProgress.current, 1);
                 const partialTheta = (rot.theta || 0) * partialT;
-                const fullLambda = rot.lambda || 0; // Lambda is applied instantly
+                const fullLambda = rot.lambda || 0;
+                const fullPhi = rot.phi || 0;
+                const totalPhase = fullLambda + fullPhi;
 
-                // Apply rotations from base
+                // Apply rotations from base: lambda -> theta -> phi
                 let newVec = baseVec.current.clone();
-                if (Math.abs(rot.theta || 0) > 0.01) {
-                    newVec = applyRotation(newVec, 'y', partialTheta);
-                }
-                // Lambda always applied fully (not animated)
                 if (Math.abs(fullLambda) > 0.01) {
                     newVec = applyRotation(newVec, 'z', fullLambda);
                 }
+                if (Math.abs(rot.theta || 0) > 0.01) {
+                    newVec = applyRotation(newVec, 'y', partialTheta);
+                }
+                if (Math.abs(fullPhi) > 0.01) {
+                    newVec = applyRotation(newVec, 'z', fullPhi);
+                }
                 setDisplayVec(newVec);
-                // Lambda display is also instant
-                setDisplayLambda(baseLambda.current + fullLambda);
+                setDisplayLambda(baseLambda.current + totalPhase);
 
                 if (currentRotationProgress.current >= 1) {
                     // Complete this compound rotation
                     baseVec.current = newVec.clone();
-                    baseLambda.current += fullLambda;
+                    baseLambda.current += totalPhase;
                     animatedRotationCount.current++;
                     currentRotationProgress.current = 0;
                 }
@@ -226,7 +239,13 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
     });
 
     const direction = displayVec.clone().normalize();
-    const arrowLen = 0.88;
+    // Shorten arrow for overlapping vectors: each offset level shortens by 0.12
+    const shortenFactor = Math.max(0.3, 1 - depthOffset * 0.15);
+    const baseArrowLen = 0.88;
+    const arrowLen = baseArrowLen * shortenFactor;
+    const lineLen = 0.78 * shortenFactor;
+    const stickPos = 0.70 * shortenFactor;
+    const arcPos = 0.70 * shortenFactor;
     const position = [displayVec.x * arrowLen, displayVec.y * arrowLen, displayVec.z * arrowLen];
 
     const quaternion = useMemo(() => {
@@ -241,10 +260,10 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
         let localMinusX = new THREE.Vector3(-1, 0, 0).applyQuaternion(quaternion);
         // Rotate around the state vector by displayLambda
         localMinusX.applyAxisAngle(direction, displayLambda);
-        localMinusX.normalize().multiplyScalar(0.12);
-        const base = direction.clone().multiplyScalar(0.65);
+        localMinusX.normalize().multiplyScalar(0.10);
+        const base = direction.clone().multiplyScalar(stickPos); // At base of cone
         return [[base.x, base.y, base.z], [base.x + localMinusX.x, base.y + localMinusX.y, base.z + localMinusX.z]];
-    }, [direction.x, direction.y, direction.z, displayLambda, quaternion]);
+    }, [direction.x, direction.y, direction.z, displayLambda, quaternion, stickPos]);
 
     // Phase arc: shows accumulated lambda (mod 2π), purple curved line
     const arcPoints = useMemo(() => {
@@ -255,7 +274,7 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
 
         const points = [];
         const segments = 32;
-        const radius = 0.12;
+        const radius = 0.10;
 
         for (let i = 0; i <= segments; i++) {
             const t = (i / segments) * arcAngle;
@@ -272,26 +291,26 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
     }, [quaternion]);
 
     const arcPosition = useMemo(() => {
-        const base = direction.clone().multiplyScalar(0.65);
+        const base = direction.clone().multiplyScalar(arcPos);
         return [base.x, base.y, base.z];
-    }, [direction.x, direction.y, direction.z]);
+    }, [direction.x, direction.y, direction.z, arcPos]);
 
     return (
         <group>
             {/* Main State Arrow */}
-            <Line points={[[0, 0, 0], [displayVec.x * 0.75, displayVec.y * 0.75, displayVec.z * 0.75]]} color="#00ff88" lineWidth={3} transparent opacity={currentOpacity} />
+            <Line points={[[0, 0, 0], [displayVec.x * lineLen, displayVec.y * lineLen, displayVec.z * lineLen]]} color="#00ff88" lineWidth={3} transparent opacity={currentOpacity} />
             <mesh position={position} quaternion={quaternion}>
-                <coneGeometry args={[0.06, 0.15, 12]} />
+                <coneGeometry args={[0.04, 0.10, 12]} />
                 <meshStandardMaterial color="#00ff88" emissive="#00ff88" emissiveIntensity={0.4} transparent opacity={currentOpacity} />
             </mesh>
 
-            {/* Purple Stick Indicator - points to |-⟩ and rotates with lambda */}
-            <Line points={stickEnd} color="#a371f7" lineWidth={3} transparent opacity={currentOpacity} />
+            {/* Darker Purple Stick Indicator - at base of cone, rotates with total phase */}
+            <Line points={stickEnd} color="#7c3aed" lineWidth={3} transparent opacity={currentOpacity} />
 
-            {/* Purple Phase Arc - shows accumulated lambda rotation */}
+            {/* Dark Purple Phase Arc - shows accumulated lambda rotation */}
             {arcPoints && (
                 <group position={arcPosition} quaternion={arcQuaternion}>
-                    <Line points={arcPoints} color="#a371f7" lineWidth={2} transparent opacity={currentOpacity * 0.8} />
+                    <Line points={arcPoints} color="#7c3aed" lineWidth={2} transparent opacity={currentOpacity * 0.8} />
                 </group>
             )}
         </group>
@@ -322,6 +341,40 @@ function SingleBlochSphere({ branches, position = [0, 0, 0], qubitIndex, isPlayM
         setPrevBranchCount(branches.length);
     }, [branches.length, prevBranchCount]);
 
+    // Compute depth offsets for overlapping branches
+    const branchesWithOffset = useMemo(() => {
+        if (branches.length <= 1) {
+            return branches.map(b => ({ ...b, depthOffset: 0 }));
+        }
+
+        const result = [];
+        const assignedPositions = [];
+        const threshold = 0.15; // Distance threshold for overlap detection
+
+        for (const branch of branches) {
+            if (!branch.coords) {
+                result.push({ ...branch, depthOffset: 0 });
+                continue;
+            }
+
+            let offset = 0;
+            // Check against already assigned branches
+            for (const assigned of assignedPositions) {
+                const dx = branch.coords.x - assigned.coords.x;
+                const dy = branch.coords.y - assigned.coords.y;
+                const dz = branch.coords.z - assigned.coords.z;
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (dist < threshold) {
+                    offset = Math.max(offset, assigned.offset + 1);
+                }
+            }
+            assignedPositions.push({ coords: branch.coords, offset });
+            result.push({ ...branch, depthOffset: offset });
+        }
+
+        return result;
+    }, [branches]);
+
     return (
         <group position={position}>
             <Billboard position={[0, 1.6, 0]}>
@@ -344,7 +397,7 @@ function SingleBlochSphere({ branches, position = [0, 0, 0], qubitIndex, isPlayM
             <Line points={[[0, -1.2, 0], [0, 1.2, 0]]} color={AXIS_COLOR} lineWidth={1} transparent opacity={0.4} />
             <AxisLabel position={[0, 1.4, 0]} text="|0⟩" />
             <AxisLabel position={[0, -1.4, 0]} text="|1⟩" />
-            {branches.map((branch, i) => (
+            {branchesWithOffset.map((branch, i) => (
                 <StateArrow
                     key={i}
                     targetCoords={branch.coords}
@@ -352,6 +405,7 @@ function SingleBlochSphere({ branches, position = [0, 0, 0], qubitIndex, isPlayM
                     opacity={branch.probability}
                     isPlayMode={isPlayMode}
                     isNewBranch={newBranchIndices.includes(i)}
+                    depthOffset={branch.depthOffset || 0}
                 />
             ))}
         </group>

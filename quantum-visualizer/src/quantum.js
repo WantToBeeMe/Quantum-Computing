@@ -36,119 +36,139 @@ export const createU3Matrix = (theta, phi, lambda) => [
 ];
 
 // Gate colors: I/X=Green (X-axis), Y=Purple (Y-axis), Z/S/T=Blue (Z-axis)
-// animDuration: relative animation time (0-1 scale, π rotation ≈ 1)
+// All gates store both matrix and decomposition for unified handling
 export const GATES = {
     I: {
         name: 'I',
         label: 'I',
         description: 'Identity - does nothing',
-        matrix: [[complex(1), complex(0)], [complex(0), complex(1)]],
-        color: '#3fb950', // Green
-        decomposition: null,
-        rotation: null,
-        animDuration: 0 // No animation
+        color: '#3fb950',
+        showDecomposition: false,
+        animDuration: 0,
+        defaultMatrix: [[complex(1), complex(0)], [complex(0), complex(1)]],
+        defaultDecomposition: { theta: 0, phi: 0, lambda: 0 }
     },
     X: {
         name: 'X',
         label: 'X',
         description: 'Pauli-X (NOT) - π rotation around X axis',
-        matrix: [[complex(0), complex(1)], [complex(1), complex(0)]],
-        color: '#3fb950', // Green
-        decomposition: { gate: 'U', params: { theta: Math.PI, phi: 0, lambda: Math.PI } },
-        rotation: { axis: 'x', angle: Math.PI },
-        animDuration: 1 // Full π rotation
+        color: '#3fb950',
+        showDecomposition: false,
+        animDuration: 1,
+        defaultMatrix: [[complex(0), complex(1)], [complex(1), complex(0)]],
+        defaultDecomposition: { theta: Math.PI, phi: 0, lambda: Math.PI }
     },
     Y: {
         name: 'Y',
         label: 'Y',
         description: 'Pauli-Y - π rotation around Y axis',
-        matrix: [[complex(0), complex(0, -1)], [complex(0, 1), complex(0)]],
-        color: '#a371f7', // Purple
-        decomposition: { gate: 'U', params: { theta: Math.PI, phi: Math.PI / 2, lambda: Math.PI / 2 } },
-        rotation: { axis: 'y', angle: Math.PI },
-        animDuration: 1
+        color: '#a371f7',
+        showDecomposition: false,
+        animDuration: 1,
+        defaultMatrix: [[complex(0), complex(0, -1)], [complex(0, 1), complex(0)]],
+        defaultDecomposition: { theta: Math.PI, phi: Math.PI / 2, lambda: Math.PI / 2 }
     },
     Z: {
         name: 'Z',
         label: 'Z',
         description: 'Pauli-Z - π rotation around Z axis (phase flip)',
-        matrix: [[complex(1), complex(0)], [complex(0), complex(-1)]],
-        color: '#58a6ff', // Blue
-        decomposition: { gate: 'U', params: { theta: 0, phi: 0, lambda: Math.PI } },
-        rotation: { axis: 'z', angle: Math.PI },
-        animDuration: 1
+        color: '#58a6ff',
+        showDecomposition: false,
+        animDuration: 1,
+        defaultMatrix: [[complex(1), complex(0)], [complex(0), complex(-1)]],
+        defaultDecomposition: { theta: 0, phi: 0, lambda: Math.PI }
     },
     H: {
         name: 'H',
         label: 'H',
         description: 'Hadamard - creates superposition',
-        matrix: [[complex(SQRT2_INV), complex(SQRT2_INV)], [complex(SQRT2_INV), complex(-SQRT2_INV)]],
-        color: '#f85149', // Red
-        decomposition: { gate: 'U', params: { theta: Math.PI / 2, phi: 0, lambda: Math.PI } },
-        rotation: { axis: 'yz', angle: Math.PI },
-        animDuration: 1
+        color: '#f85149',
+        showDecomposition: false,
+        animDuration: 1,
+        defaultMatrix: [[complex(SQRT2_INV), complex(SQRT2_INV)], [complex(SQRT2_INV), complex(-SQRT2_INV)]],
+        defaultDecomposition: { theta: Math.PI / 2, phi: 0, lambda: Math.PI }
     },
     S: {
         name: 'S',
         label: 'S',
         description: 'S gate - π/2 rotation around Z axis',
-        matrix: [[complex(1), complex(0)], [complex(0), complex(0, 1)]],
-        color: '#58a6ff', // Blue
-        decomposition: { gate: 'U', params: { theta: 0, phi: 0, lambda: Math.PI / 2 } },
-        rotation: { axis: 'z', angle: Math.PI / 2 },
-        animDuration: 0.5
+        color: '#58a6ff',
+        showDecomposition: false,
+        animDuration: 0.5,
+        defaultMatrix: [[complex(1), complex(0)], [complex(0), complex(0, 1)]],
+        defaultDecomposition: { theta: 0, phi: 0, lambda: Math.PI / 2 }
     },
     T: {
         name: 'T',
         label: 'T',
         description: 'T gate - π/4 rotation around Z axis',
-        matrix: [[complex(1), complex(0)], [complex(0), cFromPolar(1, Math.PI / 4)]],
-        color: '#58a6ff', // Blue
-        decomposition: { gate: 'U', params: { theta: 0, phi: 0, lambda: Math.PI / 4 } },
-        rotation: { axis: 'z', angle: Math.PI / 4 },
-        animDuration: 0.25
+        color: '#58a6ff',
+        showDecomposition: false,
+        animDuration: 0.25,
+        defaultMatrix: [[complex(1), complex(0)], [complex(0), cFromPolar(1, Math.PI / 4)]],
+        defaultDecomposition: { theta: 0, phi: 0, lambda: Math.PI / 4 }
     },
     U: {
         name: 'U',
         label: 'U',
         description: 'Universal gate - U(θ, φ, λ)',
-        matrix: null,
-        color: '#d29922', // Yellow
-        isParametric: true,
-        defaultParams: { theta: 0, phi: 0, lambda: 0 },
-        decomposition: null,
-        rotation: null, // Computed from params
-        animDuration: null // Computed from params
+        color: '#d29922',
+        showDecomposition: true,
+        animDuration: null, // Computed from params
+        defaultMatrix: [[complex(1), complex(0)], [complex(0), complex(1)]], // Identity by default
+        defaultDecomposition: { theta: 0, phi: 0, lambda: 0 }
     },
     BARRIER: {
         name: 'BARRIER',
         label: '┃',
         description: 'Barrier - visual separator',
-        matrix: [[complex(1), complex(0)], [complex(0), complex(1)]],
-        color: '#8b949e', // White/gray
+        color: '#8b949e',
         isBarrier: true,
-        decomposition: null,
-        rotation: null,
-        animDuration: 0
+        showDecomposition: false,
+        animDuration: 0,
+        defaultMatrix: [[complex(1), complex(0)], [complex(0), complex(1)]],
+        defaultDecomposition: { theta: 0, phi: 0, lambda: 0 }
     }
 };
 
-// Apply a gate to a qubit state
-export const applyGate = (state, gate, params = null) => {
-    if (gate.isBarrier) return state;
-
-    let matrix = gate.matrix;
-
-    if (gate.isParametric && params) {
-        matrix = createU3Matrix(params.theta, params.phi, params.lambda);
-    }
-
+// Apply a matrix to a qubit state (core calculation)
+export const applyMatrix = (state, matrix) => {
     if (!matrix) return state;
-
     return normalize([
         cAdd(cMul(matrix[0][0], state[0]), cMul(matrix[0][1], state[1])),
         cAdd(cMul(matrix[1][0], state[0]), cMul(matrix[1][1], state[1]))
     ]);
+};
+
+// Create a circuit gate object with both matrix and decomposition
+export const createGateInstance = (gateName, decomposition = null) => {
+    const gateRef = GATES[gateName];
+    if (!gateRef) return null;
+
+    const decomp = decomposition || { ...gateRef.defaultDecomposition };
+    const matrix = gateName === 'U' || decomposition
+        ? createU3Matrix(decomp.theta, decomp.phi, decomp.lambda)
+        : gateRef.defaultMatrix.map(row => row.map(c => ({ ...c })));
+
+    return {
+        gate: gateName,
+        matrix,
+        decomposition: decomp,
+        controlIndex: null
+    };
+};
+
+// Update matrix from decomposition (call when sliders change)
+export const updateMatrixFromDecomposition = (gateInstance) => {
+    const { theta, phi, lambda } = gateInstance.decomposition;
+    gateInstance.matrix = createU3Matrix(theta, phi, lambda);
+    return gateInstance;
+};
+
+// Apply a gate instance to a state
+export const applyGate = (state, gateInstance) => {
+    if (gateInstance.gate === 'BARRIER') return state;
+    return applyMatrix(state, gateInstance.matrix);
 };
 
 // Get rotation info for animation
@@ -197,6 +217,48 @@ export const getMultiQubitProbabilities = (qubitStates, includeZero = true) => {
 
     results.sort((a, b) => b.probability - a.probability);
     return results;
+};
+
+// Extract rotation parameters (theta, phi, lambda) from a 2x2 unitary matrix
+// Uses ZYZ decomposition: U = e^(iα) * Rz(φ) * Ry(θ) * Rz(λ)
+export const extractRotationFromMatrix = (matrix) => {
+    if (!matrix || !matrix[0] || !matrix[1]) return { theta: 0, phi: 0, lambda: 0 };
+
+    const [[a, b], [c, d]] = matrix;
+
+    // Magnitude of a (should equal cos(theta/2))
+    const aMag = cAbs(a);
+    const cMag = cAbs(c);
+
+    // Handle edge cases
+    if (aMag < 0.0001) {
+        // theta = π (a ≈ 0)
+        const theta = Math.PI;
+        const phi = cPhase(c);
+        const lambda = -cPhase(b);
+        return { theta, phi, lambda };
+    }
+
+    if (cMag < 0.0001) {
+        // theta = 0 (c ≈ 0, identity-like)
+        const phiPlusLambda = cPhase(d) - cPhase(a);
+        return { theta: 0, phi: phiPlusLambda / 2, lambda: phiPlusLambda / 2 };
+    }
+
+    // General case
+    const theta = 2 * Math.acos(Math.min(1, aMag));
+
+    // Extract phases
+    const aPhase = cPhase(a);
+    const cPhase_ = cPhase(c);
+    const bPhase = cPhase(b);
+
+    // phi + lambda = phase(d) - phase(a) (global phase adjusted)
+    // phi - lambda = phase(c) - phase(b) + π
+    const phi = cPhase_;
+    const lambda = -bPhase;
+
+    return { theta, phi, lambda };
 };
 
 // Convert qubit state to Bloch sphere coordinates

@@ -1,0 +1,16 @@
+/* Shared panel styling */
+.panel-box {
+    background: #161b22;
+    border-radius: 10px;
+    padding: 12px;
+    border: 1px solid #30363d;
+}
+
+.panel-title {
+    margin: 0 0 10px 0;
+    color: #c9d1d9;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}

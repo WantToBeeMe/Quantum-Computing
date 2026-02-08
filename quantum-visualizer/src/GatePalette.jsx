@@ -1,4 +1,4 @@
-import { GATES } from './quantum';
+import { GATES, createGateInstance } from './quantum';
 import './GatePalette.css';
 
 export default function GatePalette() {
@@ -7,12 +7,13 @@ export default function GatePalette() {
     const barrier = GATES.BARRIER;
 
     const handleDragStart = (e, gate) => {
+        // Create a full gate instance with matrix and decomposition
+        const gateInstance = createGateInstance(gate.name);
         const gateData = {
-            gate: gate.name,
+            ...gateInstance,
             label: gate.label,
             color: gate.color,
             description: gate.description,
-            params: gate.defaultParams || null,
             isBarrier: gate.isBarrier || false
         };
         e.dataTransfer.setData('gate', JSON.stringify(gateData));
