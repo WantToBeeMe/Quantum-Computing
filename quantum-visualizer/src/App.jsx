@@ -138,29 +138,66 @@ function App() {
         const rotations = buildRotations(gates);
         return [{ state, coords: stateToBlochCoords(state), probability: 1, rotations }];
       } else {
-        // Controlled gate handling
-        const ctrlSlot = controlledGate.slot;
-        const ctrlIdx = controlledGate.controlIndex;
+        // Find all controlled gates
+        const controlledGates = gates.filter(g => g.controlIndex !== undefined && g.controlIndex !== null);
+        const uniqueControls = [...new Set(controlledGates.map(g => g.controlIndex))];
 
-        // Get control probability at the slot (not including this gate)
-        const ctrlState = getControlStateAtSlot(ctrlIdx, ctrlSlot - 1);
-        const ctrlProb = getProbabilities(ctrlState).prob1;
+        // Enumerate all combinations of control states (0 or 1 for each control qubit)
+        const numControls = uniqueControls.length;
+        const numCombinations = Math.pow(2, numControls);
 
-        // State if control is |0⟩ (skip controlled gates)
-        const gatesWithoutControlled = gates.filter(g => g.controlIndex === undefined || g.controlIndex === null);
-        let stateNo = STATE_ZERO();
-        stateNo = applyGates(gatesWithoutControlled, stateNo);
-        const rotationsNo = buildRotations(gatesWithoutControlled);
-
-        // State if control is |1⟩ (apply all gates)
-        let stateWith = STATE_ZERO();
-        stateWith = applyGates(gates, stateWith);
-        const rotationsWith = buildRotations(gates);
+        // Get probabilities for each control qubit being in |1⟩
+        const controlProbs = uniqueControls.map(ctrlIdx => {
+          // Find earliest controlled gate for this control
+          const ctrlGate = controlledGates.find(g => g.controlIndex === ctrlIdx);
+          const ctrlState = getControlStateAtSlot(ctrlIdx, ctrlGate.slot - 1);
+          return getProbabilities(ctrlState).prob1;
+        });
 
         const branches = [];
-        if (1 - ctrlProb > 0.01) branches.push({ state: stateNo, coords: stateToBlochCoords(stateNo), probability: 1 - ctrlProb, rotations: rotationsNo });
-        if (ctrlProb > 0.01) branches.push({ state: stateWith, coords: stateToBlochCoords(stateWith), probability: ctrlProb, rotations: rotationsWith });
-        return branches.length > 0 ? branches : [{ state: stateNo, coords: stateToBlochCoords(stateNo), probability: 1, rotations: rotationsNo }];
+
+        for (let combo = 0; combo < numCombinations && branches.length < 10; combo++) {
+          // Build control state map for this combination
+          const controlActive = {};
+          let probability = 1;
+
+          for (let i = 0; i < numControls; i++) {
+            const isActive = (combo >> i) & 1;
+            controlActive[uniqueControls[i]] = isActive === 1;
+            probability *= isActive ? controlProbs[i] : (1 - controlProbs[i]);
+          }
+
+          // Skip low-probability branches
+          if (probability < 0.01) continue;
+
+          // Build gate list for this control combination
+          const activeGates = gates.filter(g => {
+            if (g.controlIndex === undefined || g.controlIndex === null) return true;
+            return controlActive[g.controlIndex];
+          });
+
+          let state = STATE_ZERO();
+          state = applyGates(activeGates, state);
+          const rotations = buildRotations(activeGates);
+
+          branches.push({
+            state,
+            coords: stateToBlochCoords(state),
+            probability,
+            rotations
+          });
+        }
+
+        // Sort by probability descending, limit to 10
+        branches.sort((a, b) => b.probability - a.probability);
+        if (branches.length > 10) branches.length = 10;
+
+        return branches.length > 0 ? branches : [{
+          state: STATE_ZERO(),
+          coords: stateToBlochCoords(STATE_ZERO()),
+          probability: 1,
+          rotations: []
+        }];
       }
     });
   }, [circuits, animationFrame, totalFrames, getOrderedGates]);

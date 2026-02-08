@@ -50,26 +50,35 @@ function StateDisplay({ qubitStates }) {
             <h4>Mathematical State</h4>
             <div className="state-equations">
                 {qubitStates.map((branches, qIdx) => {
-                    // Get the primary state (first branch or highest probability)
-                    const primaryBranch = branches && branches.length > 0 ? branches[0] : null;
-                    const state = primaryBranch?.state;
-                    const parts = formatStateString(state);
+                    // Show all branches, not just first one
+                    const branchList = branches && branches.length > 0 ? branches : [];
 
                     return (
-                        <div key={qIdx} className="qubit-state-row">
+                        <div key={qIdx} className="qubit-state-container">
                             <span className="qubit-label">q{qIdx}:</span>
-                            <span className="state-equation">
-                                {Array.isArray(parts) ? parts.map((p, i) => (
-                                    <React.Fragment key={i}>
-                                        {i > 0 && <span className="operator"> + </span>}
-                                        <span className="coefficient">{p.coef}</span>
-                                        <span className="ket">{p.ket}</span>
-                                    </React.Fragment>
-                                )) : <span className="ket">{parts}</span>}
-                            </span>
-                            {branches && branches.length > 1 && (
-                                <span className="branch-indicator">({branches.length} branches)</span>
-                            )}
+                            <div className="branch-list">
+                                {branchList.map((branch, bIdx) => {
+                                    const parts = formatStateString(branch.state);
+                                    const probPercent = (branch.probability * 100).toFixed(0);
+
+                                    return (
+                                        <div key={bIdx} className="branch-row">
+                                            {branchList.length > 1 && (
+                                                <span className="branch-probability">{probPercent}%</span>
+                                            )}
+                                            <span className="state-equation">
+                                                {Array.isArray(parts) ? parts.map((p, i) => (
+                                                    <React.Fragment key={i}>
+                                                        {i > 0 && <span className="operator"> + </span>}
+                                                        <span className="coefficient">{p.coef}</span>
+                                                        <span className="ket">{p.ket}</span>
+                                                    </React.Fragment>
+                                                )) : <span className="ket">{parts}</span>}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
                     );
                 })}

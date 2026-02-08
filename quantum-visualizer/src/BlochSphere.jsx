@@ -286,7 +286,15 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
         return [[base.x, base.y, base.z], [base.x + localMinusX.x, base.y + localMinusX.y, base.z + localMinusX.z]];
     }, [direction.x, direction.y, direction.z, displayLambda, quaternion, lambdaStickPos]);
 
-    // Phi stick: magenta, points to |-⟩, rotates with phi only
+    // Lambda reference line: dashed, shows original direction (no rotation)
+    const lambdaRefEnd = useMemo(() => {
+        let localMinusX = new THREE.Vector3(-1, 0, 0).applyQuaternion(quaternion);
+        localMinusX.normalize().multiplyScalar(0.10);
+        const base = direction.clone().multiplyScalar(lambdaStickPos);
+        return [[base.x, base.y, base.z], [base.x + localMinusX.x, base.y + localMinusX.y, base.z + localMinusX.z]];
+    }, [direction.x, direction.y, direction.z, quaternion, lambdaStickPos]);
+
+    // Phi stick: purple, points to |-⟩, rotates with phi only
     const phiStickEnd = useMemo(() => {
         let localMinusX = new THREE.Vector3(-1, 0, 0).applyQuaternion(quaternion);
         localMinusX.applyAxisAngle(direction, displayPhi);
@@ -294,6 +302,14 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
         const base = direction.clone().multiplyScalar(phiStickPos);
         return [[base.x, base.y, base.z], [base.x + localMinusX.x, base.y + localMinusX.y, base.z + localMinusX.z]];
     }, [direction.x, direction.y, direction.z, displayPhi, quaternion, phiStickPos]);
+
+    // Phi reference line: dashed, shows original direction (no rotation)
+    const phiRefEnd = useMemo(() => {
+        let localMinusX = new THREE.Vector3(-1, 0, 0).applyQuaternion(quaternion);
+        localMinusX.normalize().multiplyScalar(0.10);
+        const base = direction.clone().multiplyScalar(phiStickPos);
+        return [[base.x, base.y, base.z], [base.x + localMinusX.x, base.y + localMinusX.y, base.z + localMinusX.z]];
+    }, [direction.x, direction.y, direction.z, quaternion, phiStickPos]);
 
     // Phi arc: shows accumulated phi rotation (purple curved line)
     const phiArcPoints = useMemo(() => {
@@ -357,9 +373,11 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
             </mesh>
 
             {/* Blue Lambda Stick - lower on vector, shows lambda phase */}
+            <Line points={lambdaRefEnd} color="#3b82f6" lineWidth={1} dashed dashScale={40} transparent opacity={currentOpacity * 0.4} />
             <Line points={lambdaStickEnd} color="#3b82f6" lineWidth={3} transparent opacity={currentOpacity * 0.8} />
 
             {/* Purple Phi Stick - at base of cone, shows phi phase */}
+            <Line points={phiRefEnd} color="#a855f7" lineWidth={1} dashed dashScale={40} transparent opacity={currentOpacity * 0.4} />
             <Line points={phiStickEnd} color="#a855f7" lineWidth={3} transparent opacity={currentOpacity} />
 
             {/* Blue Lambda Arc - shows accumulated lambda rotation */}
