@@ -112,7 +112,7 @@ export const GATES = {
         name: 'U',
         label: 'U',
         description: 'Universal gate - U(θ, φ, λ)',
-        color: '#d29922',
+        color: '#ffcc00',
         showDecomposition: true,
         animDuration: null, // Computed from params
         defaultMatrix: [[complex(1), complex(0)], [complex(0), complex(1)]], // Identity by default

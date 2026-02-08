@@ -28,6 +28,7 @@ function App() {
 
   const [animationFrame, setAnimationFrame] = useState(-1); // -1 = show all
   const [isPlaying, setIsPlaying] = useState(false);
+  const [configControlSignals, setConfigControlSignals] = useState([]); // Signals from config selection
   const [leftPanelWidth, setLeftPanelWidth] = useState(400);
   const [configHeightPercent, setConfigHeightPercent] = useState(80);
   const [isDraggingH, setIsDraggingH] = useState(false);
@@ -257,6 +258,54 @@ function App() {
   const probabilities = useMemo(() => getMultiQubitProbabilities(qubitStates, false), [qubitStates]);
   const allProbabilities = useMemo(() => getMultiQubitProbabilities(qubitStates, true), [qubitStates]);
 
+  // Compute active control signals for current animation frame
+  const activeControlSignals = useMemo(() => {
+    // Frame 0 is initial state (no gates), frame -1 is not playing
+    if (!isPlaying || animationFrame <= 0) return [];
+
+    const signals = [];
+    const frame = animationFrame;
+    const sortedBarriers = [...barriers].sort((a, b) => a - b);
+
+    // Find which slot range is active for this frame
+    let minSlot = 0;
+    let maxSlot = Infinity;
+    if (frame > 0 && frame <= sortedBarriers.length) {
+      minSlot = frame > 1 ? sortedBarriers[frame - 2] : 0;
+      maxSlot = sortedBarriers[frame - 1];
+    } else if (frame > sortedBarriers.length) {
+      minSlot = sortedBarriers.length > 0 ? sortedBarriers[sortedBarriers.length - 1] : 0;
+    }
+
+    // Find controlled gates in the active slot range
+    circuits.forEach((row, qIdx) => {
+      row.forEach((gate, slot) => {
+        if (gate && gate.controlIndex !== undefined && gate.controlIndex !== null) {
+          if (slot >= minSlot && slot < maxSlot) {
+            // Check if this gate causes phase kickback (Z-type gates: Z, S, T, or gates with lambda rotation)
+            const hasKickback = ['Z', 'S', 'T'].includes(gate.gate) ||
+              (gate.decomposition && Math.abs(gate.decomposition.lambda) > 0.01);
+            signals.push({ from: gate.controlIndex, to: qIdx, hasKickback });
+          }
+        }
+      });
+    });
+
+    return signals;
+  }, [circuits, barriers, animationFrame, isPlaying]);
+
+  // Handler for control signals triggered from GateSettings
+  const handleControlSignal = useCallback((fromQubit, toQubit) => {
+    setConfigControlSignals([{ from: fromQubit, to: toQubit }]);
+    // Clear after a brief moment (signal will self-destruct)
+    setTimeout(() => setConfigControlSignals([]), 50);
+  }, []);
+
+  // Combine animation signals and config signals
+  const allControlSignals = useMemo(() => {
+    return [...activeControlSignals, ...configControlSignals];
+  }, [activeControlSignals, configControlSignals]);
+
   const handleInsertGate = useCallback((qi, si, gate) => {
     const isOccupied = circuits[qi] && circuits[qi][si];
 
@@ -471,6 +520,7 @@ function App() {
               numQubits={circuits.length}
               onRemove={selectedGate?.isBarrier ? () => handleRemoveBarrier(selectedGate.slot) : handleRemoveGate}
               onUpdate={handleUpdateGate}
+              onControlSignal={handleControlSignal}
             />
           </div>
 
@@ -499,6 +549,7 @@ function App() {
             visibility={qubitVisibility}
             focusQubit={focusQubit}
             isPlaying={isPlaying}
+            controlSignals={allControlSignals}
           />
         </div>
       </main>

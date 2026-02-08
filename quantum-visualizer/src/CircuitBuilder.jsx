@@ -233,8 +233,8 @@ export default function CircuitBuilder({
 
                                         return (
                                             <g key={`ctrl-${qi}-${si}`}>
-                                                <line x1={gateX} y1={gateY} x2={gateX} y2={ctrlY} stroke="#a371f7" strokeWidth="2" />
-                                                <circle cx={gateX} cy={ctrlY} r="5" fill="#a371f7" />
+                                                <line x1={gateX} y1={gateY} x2={gateX} y2={ctrlY} stroke="#ff9900" strokeWidth="2" />
+                                                <circle cx={gateX} cy={ctrlY} r="5" fill="#ff9900" />
                                             </g>
                                         );
                                     })

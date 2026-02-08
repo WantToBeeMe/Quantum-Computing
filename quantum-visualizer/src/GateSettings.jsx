@@ -30,7 +30,7 @@ const toPiNotation = (rad) => {
     return rad.toFixed(3);
 };
 
-export default function GateSettings({ gate, gateIndex, qubitIndex, onRemove, onUpdate, numQubits }) {
+export default function GateSettings({ gate, gateIndex, qubitIndex, onRemove, onUpdate, numQubits, onControlSignal }) {
     const [isControlled, setIsControlled] = useState(gate?.controlIndex !== undefined && gate?.controlIndex !== null);
     const [controlQubit, setControlQubit] = useState(gate?.controlIndex ?? -1);
     const [useSliders, setUseSliders] = useState(false);
@@ -123,6 +123,10 @@ export default function GateSettings({ gate, gateIndex, qubitIndex, onRemove, on
         setControlQubit(ctrl);
         if (ctrl >= 0) {
             onUpdate(qubitIndex, gateIndex, { ...gate, controlIndex: ctrl });
+            // Trigger control signal animation
+            if (onControlSignal) {
+                onControlSignal(ctrl, qubitIndex);
+            }
         }
     };
 

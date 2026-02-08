@@ -397,6 +397,110 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
     );
 }
 
+// Animated photon signal between control and target qubit spheres
+// variant: 'control' (orange, curve up) or 'kickback' (light blue, curve down)
+function ControlSignal({ fromPosition, toPosition, onComplete, variant = 'control' }) {
+    const photonRef = useRef();
+    const trailRef = useRef();
+    const progressRef = useRef(0);
+    const completedRef = useRef(false);
+    const DURATION = 0.2; // 0.2 second animation
+
+    // Colors based on variant
+    const color = variant === 'kickback' ? '#5bc0de' : '#ff9900';
+    const curveDirection = variant === 'kickback' ? -1 : 1; // -1 = down, 1 = up
+
+    // Calculate curve arc height based on distance
+    const arcHeight = useMemo(() => {
+        const dx = toPosition[0] - fromPosition[0];
+        const dz = toPosition[2] - fromPosition[2];
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        return Math.max(0.25, dist * 0.18) * curveDirection;
+    }, [fromPosition, toPosition, curveDirection]);
+
+    // Get position along curved path
+    const getPointOnCurve = useCallback((t) => {
+        const x = fromPosition[0] + (toPosition[0] - fromPosition[0]) * t;
+        const y = fromPosition[1] + (toPosition[1] - fromPosition[1]) * t + Math.sin(t * Math.PI) * arcHeight;
+        const z = fromPosition[2] + (toPosition[2] - fromPosition[2]) * t;
+        return [x, y, z];
+    }, [fromPosition, toPosition, arcHeight]);
+
+    // Animate photon
+    useFrame((state, delta) => {
+        if (completedRef.current) return;
+
+        progressRef.current += delta / DURATION;
+
+        if (progressRef.current >= 1) {
+            progressRef.current = 1;
+            completedRef.current = true;
+            if (onComplete) onComplete();
+        }
+
+        const t = progressRef.current;
+        const [x, y, z] = getPointOnCurve(t);
+
+        if (photonRef.current) {
+            photonRef.current.position.set(x, y, z);
+            // Glow brighter in the middle of travel
+            const intensity = 0.8 + Math.sin(t * Math.PI) * 0.4;
+            photonRef.current.material.emissiveIntensity = intensity;
+            // Bigger photon: base 0.12, max 0.18
+            photonRef.current.scale.setScalar(0.12 + Math.sin(t * Math.PI) * 0.06);
+        }
+
+        // Update trail (fade behind photon)
+        if (trailRef.current) {
+            const trailPoints = [];
+            const trailLength = 0.15; // Trail covers 15% of path behind photon
+            const steps = 10;
+            for (let i = 0; i <= steps; i++) {
+                const trailT = Math.max(0, t - (trailLength * (1 - i / steps)));
+                trailPoints.push(getPointOnCurve(trailT));
+            }
+
+            // Update line geometry
+            const positions = new Float32Array(trailPoints.length * 3);
+            trailPoints.forEach((pt, i) => {
+                positions[i * 3] = pt[0];
+                positions[i * 3 + 1] = pt[1];
+                positions[i * 3 + 2] = pt[2];
+            });
+            trailRef.current.geometry.setAttribute(
+                'position',
+                new THREE.BufferAttribute(positions, 3)
+            );
+        }
+    });
+
+    // Don't render after complete
+    if (completedRef.current) return null;
+
+    const startPoint = getPointOnCurve(0);
+
+    return (
+        <group>
+            {/* Glowing photon */}
+            <mesh ref={photonRef} position={startPoint}>
+                <sphereGeometry args={[0.12, 12, 12]} />
+                <meshStandardMaterial
+                    color={color}
+                    emissive={color}
+                    emissiveIntensity={1.2}
+                    transparent
+                    opacity={1}
+                />
+            </mesh>
+            {/* Trail behind photon */}
+            <line ref={trailRef}>
+                <bufferGeometry />
+                <lineBasicMaterial color={color} transparent opacity={0.6} linewidth={3} />
+            </line>
+        </group>
+    );
+}
+
 function AxisLabel({ position, text }) {
     return (
         <Billboard position={position}>
@@ -524,8 +628,25 @@ function CameraController({ focusPosition, controlsRef }) {
     return null;
 }
 
-function Scene({ sphereData, focusPosition, isPlayMode, onUserInteract }) {
+function Scene({ sphereData, focusPosition, isPlayMode, onUserInteract, controlSignals = [] }) {
     const controlsRef = useRef();
+    const [activeSignals, setActiveSignals] = useState([]);
+    const signalIdRef = useRef(0);
+
+    // When new control signals come in, create signal instances with unique keys
+    useEffect(() => {
+        if (controlSignals.length > 0) {
+            const newSignals = controlSignals.map(signal => ({
+                ...signal,
+                id: signalIdRef.current++
+            }));
+            setActiveSignals(prev => [...prev, ...newSignals]);
+        }
+    }, [controlSignals.map(s => `${s.from}-${s.to}`).join(',')]);
+
+    const handleSignalComplete = useCallback((id) => {
+        setActiveSignals(prev => prev.filter(s => s.id !== id));
+    }, []);
 
     return (
         <>
@@ -542,6 +663,33 @@ function Scene({ sphereData, focusPosition, isPlayMode, onUserInteract }) {
                     isPlayMode={isPlayMode}
                 />
             ))}
+            {/* Control signals */}
+            {activeSignals.map((signal) => {
+                const fromSphere = sphereData.find(s => s.originalIndex === signal.from);
+                const toSphere = sphereData.find(s => s.originalIndex === signal.to);
+                if (!fromSphere || !toSphere) return null;
+                return (
+                    <group key={`signal-group-${signal.id}`}>
+                        {/* Control signal: from control to target */}
+                        <ControlSignal
+                            key={`signal-${signal.id}`}
+                            fromPosition={fromSphere.position}
+                            toPosition={toSphere.position}
+                            onComplete={() => handleSignalComplete(signal.id)}
+                            variant="control"
+                        />
+                        {/* Kickback signal: from target back to control (if applicable) */}
+                        {signal.hasKickback && (
+                            <ControlSignal
+                                key={`kickback-${signal.id}`}
+                                fromPosition={toSphere.position}
+                                toPosition={fromSphere.position}
+                                variant="kickback"
+                            />
+                        )}
+                    </group>
+                );
+            })}
             <OrbitControls
                 ref={controlsRef}
                 enablePan
@@ -556,7 +704,7 @@ function Scene({ sphereData, focusPosition, isPlayMode, onUserInteract }) {
         </>
     );
 }
-export default function BlochSphereView({ qubitBranches, visibility, focusQubit, isPlaying }) {
+export default function BlochSphereView({ qubitBranches, visibility, focusQubit, isPlaying, controlSignals = [] }) {
     const numVisible = visibility.filter(v => v).length;
     const spacing = 3.5;
     const [userInteracted, setUserInteracted] = useState(false);
@@ -602,6 +750,7 @@ export default function BlochSphereView({ qubitBranches, visibility, focusQubit,
                     focusPosition={focusPosition}
                     isPlayMode={isPlaying}
                     onUserInteract={handleUserInteract}
+                    controlSignals={controlSignals}
                 />
             </Canvas>
         </div>
