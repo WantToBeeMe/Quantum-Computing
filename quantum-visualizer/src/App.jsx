@@ -188,11 +188,62 @@ function App() {
           });
         }
 
-        // Sort by probability descending, limit to 10
-        branches.sort((a, b) => b.probability - a.probability);
-        if (branches.length > 10) branches.length = 10;
+        // Merge branches with identical Bloch sphere positions AND phases
+        const coordsEqual = (c1, c2) => {
+          const tol = 0.01;
+          return Math.abs(c1.x - c2.x) < tol &&
+            Math.abs(c1.y - c2.y) < tol &&
+            Math.abs(c1.z - c2.z) < tol;
+        };
 
-        return branches.length > 0 ? branches : [{
+        // Calculate total rotation angles from rotations (normalized to -π to π)
+        const normalizeAngle = (a) => {
+          while (a > Math.PI) a -= 2 * Math.PI;
+          while (a < -Math.PI) a += 2 * Math.PI;
+          return a;
+        };
+
+        const getTotalPhases = (rotations) => {
+          let theta = 0, lambda = 0, phi = 0;
+          for (const r of rotations) {
+            theta += r.theta || 0;
+            lambda += r.lambda || 0;
+            phi += r.phi || 0;
+          }
+          return {
+            theta: normalizeAngle(theta),
+            lambda: normalizeAngle(lambda),
+            phi: normalizeAngle(phi)
+          };
+        };
+
+        const phasesEqual = (rots1, rots2) => {
+          const tol = 0.01;
+          const p1 = getTotalPhases(rots1);
+          const p2 = getTotalPhases(rots2);
+          return Math.abs(p1.theta - p2.theta) < tol &&
+            Math.abs(p1.lambda - p2.lambda) < tol &&
+            Math.abs(p1.phi - p2.phi) < tol;
+        };
+
+        const mergedBranches = [];
+        for (const branch of branches) {
+          const existing = mergedBranches.find(b =>
+            coordsEqual(b.coords, branch.coords) &&
+            phasesEqual(b.rotations, branch.rotations)
+          );
+          if (existing) {
+            existing.probability += branch.probability;
+          } else {
+            mergedBranches.push({ ...branch });
+          }
+        }
+
+        // Sort by probability descending, limit to 10
+        mergedBranches.sort((a, b) => b.probability - a.probability);
+        if (mergedBranches.length > 10) mergedBranches.length = 10;
+
+        return mergedBranches.length > 0 ? mergedBranches : [{
           state: STATE_ZERO(),
           coords: stateToBlochCoords(STATE_ZERO()),
           probability: 1,
