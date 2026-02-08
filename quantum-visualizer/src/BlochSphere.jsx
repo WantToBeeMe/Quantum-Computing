@@ -295,7 +295,7 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
         return [[base.x, base.y, base.z], [base.x + localMinusX.x, base.y + localMinusX.y, base.z + localMinusX.z]];
     }, [direction.x, direction.y, direction.z, displayPhi, quaternion, phiStickPos]);
 
-    // Phi arc: shows accumulated phi rotation (magenta curved line)
+    // Phi arc: shows accumulated phi rotation (purple curved line)
     const phiArcPoints = useMemo(() => {
         let arcAngle = displayPhi % (2 * Math.PI);
         if (arcAngle < 0) arcAngle += 2 * Math.PI;
@@ -313,15 +313,38 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
         return points;
     }, [displayPhi]);
 
+    // Lambda arc: shows accumulated lambda rotation (blue curved line)
+    const lambdaArcPoints = useMemo(() => {
+        let arcAngle = displayLambda % (2 * Math.PI);
+        if (arcAngle < 0) arcAngle += 2 * Math.PI;
+        if (arcAngle < 0.05) return null;
+
+        const points = [];
+        const segments = 32;
+        const radius = 0.10;
+
+        for (let i = 0; i <= segments; i++) {
+            const t = (i / segments) * arcAngle;
+            const angle = Math.PI - t;
+            points.push([radius * Math.cos(angle), 0, radius * Math.sin(angle)]);
+        }
+        return points;
+    }, [displayLambda]);
+
     // Arc position and orientation - orbits the state vector at phi stick position
     const arcQuaternion = useMemo(() => {
         return quaternion.clone();
     }, [quaternion]);
 
-    const arcPosition = useMemo(() => {
+    const phiArcPosition = useMemo(() => {
         const base = direction.clone().multiplyScalar(arcPos);
         return [base.x, base.y, base.z];
     }, [direction.x, direction.y, direction.z, arcPos]);
+
+    const lambdaArcPosition = useMemo(() => {
+        const base = direction.clone().multiplyScalar(lambdaStickPos);
+        return [base.x, base.y, base.z];
+    }, [direction.x, direction.y, direction.z, lambdaStickPos]);
 
     return (
         <group>
@@ -336,13 +359,20 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
             {/* Blue Lambda Stick - lower on vector, shows lambda phase */}
             <Line points={lambdaStickEnd} color="#3b82f6" lineWidth={3} transparent opacity={currentOpacity * 0.8} />
 
-            {/* Magenta Phi Stick - at base of cone, shows phi phase */}
-            <Line points={phiStickEnd} color="#d946ef" lineWidth={3} transparent opacity={currentOpacity} />
+            {/* Purple Phi Stick - at base of cone, shows phi phase */}
+            <Line points={phiStickEnd} color="#a855f7" lineWidth={3} transparent opacity={currentOpacity} />
 
-            {/* Magenta Phi Arc - shows accumulated phi rotation */}
+            {/* Blue Lambda Arc - shows accumulated lambda rotation */}
+            {lambdaArcPoints && (
+                <group position={lambdaArcPosition} quaternion={arcQuaternion}>
+                    <Line points={lambdaArcPoints} color="#3b82f6" lineWidth={2} transparent opacity={currentOpacity * 0.8} />
+                </group>
+            )}
+
+            {/* Purple Phi Arc - shows accumulated phi rotation */}
             {phiArcPoints && (
-                <group position={arcPosition} quaternion={arcQuaternion}>
-                    <Line points={phiArcPoints} color="#d946ef" lineWidth={2} transparent opacity={currentOpacity * 0.8} />
+                <group position={phiArcPosition} quaternion={arcQuaternion}>
+                    <Line points={phiArcPoints} color="#a855f7" lineWidth={2} transparent opacity={currentOpacity * 0.8} />
                 </group>
             )}
         </group>
