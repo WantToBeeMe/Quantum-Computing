@@ -200,6 +200,41 @@ const normalizeAngle = (angle) => {
     return a;
 };
 
+const complexDiv = (a, b) => {
+    const den = b.re * b.re + b.im * b.im;
+    if (den < 1e-12) return complex(0, 0);
+    return complex(
+        (a.re * b.re + a.im * b.im) / den,
+        (a.im * b.re - a.re * b.im) / den
+    );
+};
+
+// Returns target-gate eigenphase phi when U|psi> = e^(i*phi)|psi>, else null.
+export const getKickbackPhaseForControlledGate = (targetGate, targetStateBefore, tolerance = 0.01) => {
+    if (!targetGate || targetGate.gate === 'BARRIER' || targetGate.gate === 'CONTROL' || !targetGate.matrix) {
+        return null;
+    }
+
+    const state = targetStateBefore || STATE_ZERO();
+    const evolved = applyMatrix(state, targetGate.matrix);
+    const referenceIdx = state.findIndex(amp => cAbs(amp) > tolerance);
+    if (referenceIdx < 0) return null;
+
+    const rawPhase = complexDiv(evolved[referenceIdx], state[referenceIdx]);
+    const rawMag = cAbs(rawPhase);
+    if (rawMag <= tolerance) return null;
+
+    const unitPhase = cScale(rawPhase, 1 / rawMag);
+    for (let i = 0; i < state.length; i++) {
+        const expected = cMul(unitPhase, state[i]);
+        const diff = cAbs(cSub(evolved[i], expected));
+        if (diff > tolerance * 2) return null;
+    }
+
+    const phase = normalizeAngle(cPhase(unitPhase));
+    return Math.abs(phase) > tolerance ? phase : 0;
+};
+
 // True when a gate can produce visible phase kickback in this visualizer.
 // We treat phase-only controlled operations as kickback-capable.
 export const gateHasPhaseKickbackPotential = (gateInstance, tolerance = 0.01) => {

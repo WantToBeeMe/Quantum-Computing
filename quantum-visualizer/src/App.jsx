@@ -8,15 +8,12 @@ import ProbabilityBars from './ProbabilityBars';
 import StateDisplay from './StateDisplay';
 import {
   STATE_ZERO,
-  GATES,
   applyGate,
-  createGateInstance,
-  updateMatrixFromDecomposition,
-  extractRotationFromMatrix,
+  createU3Matrix,
   getMultiQubitProbabilities,
   stateToBlochCoords,
   getProbabilities,
-  gateHasPhaseKickbackPotential
+  getKickbackPhaseForControlledGate
 } from './quantum';
 import './App.css';
 
@@ -115,8 +112,38 @@ function App() {
       return qubitCache[slot] || STATE_ZERO();
     };
 
+    // For each control qubit, derive synthetic phase gates caused by outgoing controlled gates.
+    const getKickbackGatesForControl = (controlQubit) => {
+      const kickbackGates = [];
+
+      circuits.forEach((_, targetQubit) => {
+        const targetGates = getOrderedGates(targetQubit, frame);
+        targetGates.forEach((gate) => {
+          if (!gate || gate.gate === 'CONTROL') return;
+          if (gate.controlIndex !== controlQubit) return;
+
+          const targetStateBefore = stateCache[targetQubit]?.[gate.slot] || STATE_ZERO();
+          const phase = getKickbackPhaseForControlledGate(gate, targetStateBefore);
+          if (phase === null || Math.abs(phase) <= 0.01) return;
+
+          kickbackGates.push({
+            gate: 'U',
+            matrix: createU3Matrix(0, 0, phase),
+            decomposition: { theta: 0, phi: 0, lambda: phase },
+            controlIndex: null,
+            slot: gate.slot,
+            isDerivedKickback: true
+          });
+        });
+      });
+
+      return kickbackGates;
+    };
+
     return circuits.map((_, qi) => {
-      const gates = getOrderedGates(qi, frame);
+      const rowGates = getOrderedGates(qi, frame);
+      const kickbackGates = getKickbackGatesForControl(qi);
+      const gates = [...rowGates, ...kickbackGates].sort((a, b) => a.slot - b.slot);
       const controlledGate = gates.find(g => g.controlIndex !== undefined && g.controlIndex !== null && g.gate !== 'CONTROL');
       const hasControl = !!controlledGate;
 
@@ -268,16 +295,10 @@ function App() {
   const allProbabilities = useMemo(() => getMultiQubitProbabilities(qubitStates, true), [qubitStates]);
 
   // ── Phase kickback detection using column state cache ──
-  const detectPhaseKickback = useCallback((targetGate, controlQubit, slot, stateCache) => {
-    // Get the control qubit's state at this slot
-    const ctrlStateBefore = stateCache[controlQubit]?.[slot] || STATE_ZERO();
-    const { prob0, prob1 } = getProbabilities(ctrlStateBefore);
-
-    // Kickback is only visually meaningful when control has both |0⟩ and |1⟩ components.
-    const isControlInSuperposition = prob0 > 0.01 && prob1 > 0.01;
-    if (!isControlInSuperposition) return false;
-
-    return gateHasPhaseKickbackPotential(targetGate);
+  const detectPhaseKickback = useCallback((targetGate, targetQubit, slot, stateCache) => {
+    const targetStateBefore = stateCache[targetQubit]?.[slot] || STATE_ZERO();
+    const phase = getKickbackPhaseForControlledGate(targetGate, targetStateBefore);
+    return phase !== null && Math.abs(phase) > 0.01;
   }, []);
 
   // Compute active control signals for current animation frame
@@ -303,7 +324,7 @@ function App() {
       row.forEach((gate, slot) => {
         if (gate && gate.controlIndex !== undefined && gate.controlIndex !== null && gate.gate !== 'CONTROL') {
           if (slot >= minSlot && slot < maxSlot) {
-            const hasKickback = detectPhaseKickback(gate, gate.controlIndex, slot, stateCache);
+            const hasKickback = detectPhaseKickback(gate, qIdx, slot, stateCache);
             signals.push({ from: gate.controlIndex, to: qIdx, hasKickback });
           }
         }

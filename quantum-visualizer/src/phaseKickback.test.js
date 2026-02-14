@@ -7,7 +7,8 @@ import {
     cAbs,
     createGateInstance,
     createU3Matrix,
-    gateHasPhaseKickbackPotential
+    gateHasPhaseKickbackPotential,
+    getKickbackPhaseForControlledGate
 } from './quantum.js';
 
 const SQRT1_2 = 1 / Math.sqrt(2);
@@ -173,5 +174,29 @@ describe('kickback gate classification', () => {
         expect(gateHasPhaseKickbackPotential(phaseU)).toBe(true);
         expect(gateHasPhaseKickbackPotential(cancelPhaseU)).toBe(false);
         expect(gateHasPhaseKickbackPotential(nonPhaseU)).toBe(false);
+    });
+});
+
+describe('kickback phase extraction from target eigenstates', () => {
+    it('captures CNOT kickback when target is |->', () => {
+        const X = createGateInstance('X');
+        const minus = [complex(SQRT1_2), complex(-SQRT1_2)];
+        const phase = getKickbackPhaseForControlledGate(X, minus);
+        expect(phase).not.toBeNull();
+        expect(Math.abs(Math.abs(phase) - Math.PI)).toBeLessThan(1e-6);
+    });
+
+    it('returns no visible kickback for CNOT target |+>', () => {
+        const X = createGateInstance('X');
+        const plus = [complex(SQRT1_2), complex(SQRT1_2)];
+        const phase = getKickbackPhaseForControlledGate(X, plus);
+        expect(phase).toBe(0);
+    });
+
+    it('returns null when target is not an eigenstate of controlled gate', () => {
+        const X = createGateInstance('X');
+        const zero = [complex(1), complex(0)];
+        const phase = getKickbackPhaseForControlledGate(X, zero);
+        expect(phase).toBeNull();
     });
 });
