@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { GATES, createGateInstance, updateMatrixFromDecomposition, createU3Matrix } from './quantum';
+import { GATES, createU3Matrix, gateHasPhaseKickbackPotential } from './quantum';
 import './GateSettings.css';
 
 const parsePiNotation = (str) => {
@@ -142,8 +142,7 @@ export default function GateSettings({ gate, gateIndex, qubitIndex, onRemove, on
             onUpdate(qubitIndex, gateIndex, { ...gate, controlIndex: ctrl });
             // Trigger control signal animation
             if (onControlSignal) {
-                const hasKickback = ['Z', 'S', 'T'].includes(gate.gate) ||
-                    (gate.decomposition && Math.abs(gate.decomposition.lambda) > 0.01);
+                const hasKickback = gateHasPhaseKickbackPotential(gate);
                 onControlSignal(ctrl, qubitIndex, hasKickback);
             }
         }

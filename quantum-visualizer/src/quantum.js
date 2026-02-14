@@ -193,6 +193,37 @@ export const getProbabilities = (state) => {
     return { prob0, prob1 };
 };
 
+const normalizeAngle = (angle) => {
+    let a = angle;
+    while (a > Math.PI) a -= 2 * Math.PI;
+    while (a < -Math.PI) a += 2 * Math.PI;
+    return a;
+};
+
+// True when a gate can produce visible phase kickback in this visualizer.
+// We treat phase-only controlled operations as kickback-capable.
+export const gateHasPhaseKickbackPotential = (gateInstance, tolerance = 0.01) => {
+    if (!gateInstance || gateInstance.gate === 'BARRIER' || gateInstance.gate === 'CONTROL') {
+        return false;
+    }
+
+    if (['Z', 'S', 'T'].includes(gateInstance.gate)) {
+        return true;
+    }
+
+    if (gateInstance.gate !== 'U' || !gateInstance.decomposition) {
+        return false;
+    }
+
+    const { theta = 0, phi = 0, lambda = 0 } = gateInstance.decomposition;
+    if (Math.abs(theta) > tolerance) {
+        return false;
+    }
+
+    const relativePhase = normalizeAngle(phi + lambda);
+    return Math.abs(relativePhase) > tolerance;
+};
+
 // Calculate combined probabilities for multiple independent qubits
 export const getMultiQubitProbabilities = (qubitStates, includeZero = true) => {
     const numQubits = qubitStates.length;

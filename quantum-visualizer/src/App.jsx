@@ -16,8 +16,7 @@ import {
   getMultiQubitProbabilities,
   stateToBlochCoords,
   getProbabilities,
-  cAbs,
-  cPhase
+  gateHasPhaseKickbackPotential
 } from './quantum';
 import './App.css';
 
@@ -269,28 +268,17 @@ function App() {
   const allProbabilities = useMemo(() => getMultiQubitProbabilities(qubitStates, true), [qubitStates]);
 
   // ── Phase kickback detection using column state cache ──
-  const detectPhaseKickback = useCallback((targetGate, controlQubit, slot, frame) => {
+  const detectPhaseKickback = useCallback((targetGate, controlQubit, slot, stateCache) => {
     // Get the control qubit's state at this slot
-    const stateCache = buildColumnStateCache(frame);
     const ctrlStateBefore = stateCache[controlQubit]?.[slot] || STATE_ZERO();
+    const { prob0, prob1 } = getProbabilities(ctrlStateBefore);
 
-    // Check if control qubit is in superposition (has non-zero |1⟩ component)
-    const prob1 = cAbs(ctrlStateBefore[1]) ** 2;
-    if (prob1 < 0.01) return false; // Control is |0⟩, no kickback possible
+    // Kickback is only visually meaningful when control has both |0⟩ and |1⟩ components.
+    const isControlInSuperposition = prob0 > 0.01 && prob1 > 0.01;
+    if (!isControlInSuperposition) return false;
 
-    // Check if the target gate applies a phase to |1⟩ of the target qubit
-    // Phase kickback occurs when the gate has a non-trivial phase (lambda or phi)
-    const decomp = targetGate.decomposition;
-    if (!decomp) return false;
-
-    // A controlled gate causes kickback when:
-    // 1. The control qubit has a |1⟩ component AND
-    // 2. The target gate introduces a relative phase (lambda != 0 or it's a Z-type gate)
-    const hasPhaseEffect = Math.abs(decomp.lambda) > 0.01 ||
-      ['Z', 'S', 'T'].includes(targetGate.gate);
-
-    return hasPhaseEffect;
-  }, [buildColumnStateCache]);
+    return gateHasPhaseKickbackPotential(targetGate);
+  }, []);
 
   // Compute active control signals for current animation frame
   const activeControlSignals = useMemo(() => {
@@ -308,13 +296,14 @@ function App() {
     } else if (frame > sortedBarriers.length) {
       minSlot = sortedBarriers.length > 0 ? sortedBarriers[sortedBarriers.length - 1] : 0;
     }
+    const stateCache = buildColumnStateCache(frame);
 
     // Find controlled gates in the active slot range
     circuits.forEach((row, qIdx) => {
       row.forEach((gate, slot) => {
         if (gate && gate.controlIndex !== undefined && gate.controlIndex !== null && gate.gate !== 'CONTROL') {
           if (slot >= minSlot && slot < maxSlot) {
-            const hasKickback = detectPhaseKickback(gate, gate.controlIndex, slot, frame);
+            const hasKickback = detectPhaseKickback(gate, gate.controlIndex, slot, stateCache);
             signals.push({ from: gate.controlIndex, to: qIdx, hasKickback });
           }
         }
@@ -322,7 +311,7 @@ function App() {
     });
 
     return signals;
-  }, [circuits, barriers, animationFrame, isPlaying, detectPhaseKickback]);
+  }, [circuits, barriers, animationFrame, isPlaying, detectPhaseKickback, buildColumnStateCache]);
 
   // Handler for control signals triggered from GateSettings
   const handleControlSignal = useCallback((fromQubit, toQubit, hasKickback = false) => {

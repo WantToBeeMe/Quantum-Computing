@@ -652,7 +652,7 @@ function Scene({ sphereData, focusPosition, isPlayMode, onUserInteract, controlS
             }));
             setActiveSignals(prev => [...prev, ...newSignals]);
         }
-    }, [controlSignals.map(s => `${s.from}-${s.to}`).join(',')]);
+    }, [controlSignals.map(s => `${s.from}-${s.to}-${s.hasKickback ? 1 : 0}`).join(',')]);
 
     const handleSignalComplete = useCallback((id) => {
         setActiveSignals(prev => prev.filter(s => s.id !== id));
