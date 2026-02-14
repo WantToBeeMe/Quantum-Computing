@@ -5,6 +5,15 @@ import * as THREE from 'three';
 
 const AXIS_COLOR = '#6cb6ff';
 const AXIS_OPACITY = 0.2;
+const AXIS_WIDGET_STYLE = {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    width: 120,
+    height: 120,
+    pointerEvents: 'none',
+    zIndex: 5
+};
 
 // Apply a rotation to a vector on the Bloch sphere
 const applyRotation = (vec, axis, angle) => {
@@ -638,7 +647,89 @@ function CameraController({ focusPosition, controlsRef }) {
     return null;
 }
 
-function Scene({ sphereData, focusPosition, isPlayMode, onUserInteract, controlSignals = [] }) {
+function CameraQuaternionReporter({ cameraQuaternionRef }) {
+    const { camera } = useThree();
+
+    useFrame(() => {
+        if (cameraQuaternionRef?.current) {
+            cameraQuaternionRef.current.copy(camera.quaternion);
+        }
+    });
+
+    return null;
+}
+
+function AxisOverlayWidget({ cameraQuaternionRef }) {
+    const axesRef = useRef();
+    const worldToViewQuatRef = useRef(new THREE.Quaternion());
+    const axes = useMemo(() => ([
+        // Bloch axis mapping in Three space: X->X, Y->Z, Z->Y.
+        { label: 'X', dir: new THREE.Vector3(1, 0, 0), color: '#ff6b6b' },
+        { label: 'Y', dir: new THREE.Vector3(0, 0, 1), color: '#66ffff' },
+        { label: 'Z', dir: new THREE.Vector3(0, 1, 0), color: '#6cb6ff' }
+    ]), []);
+    const axisLength = 0.68;
+    const labelDistance = 0.88;
+    const tipRadius = 0.034;
+    const labelSize = 0.16;
+
+    useFrame(() => {
+        if (!axesRef.current || !cameraQuaternionRef?.current) return;
+        worldToViewQuatRef.current.copy(cameraQuaternionRef.current).invert();
+        axesRef.current.quaternion.copy(worldToViewQuatRef.current);
+    });
+
+    return (
+        <>
+            <ambientLight intensity={0.8} />
+            <group ref={axesRef}>
+                {axes.map(({ label, dir, color }) => {
+                    const px = dir.x * axisLength;
+                    const py = dir.y * axisLength;
+                    const pz = dir.z * axisLength;
+                    const nx = -px;
+                    const ny = -py;
+                    const nz = -pz;
+
+                    return (
+                        <group key={label}>
+                            <Line
+                                points={[[nx, ny, nz], [0, 0, 0]]}
+                                color={color}
+                                lineWidth={1.3}
+                                transparent
+                                opacity={0.35}
+                            />
+                            <Line
+                                points={[[0, 0, 0], [px, py, pz]]}
+                                color={color}
+                                lineWidth={2}
+                                transparent
+                                opacity={0.95}
+                            />
+                            <mesh position={[px, py, pz]}>
+                                <sphereGeometry args={[tipRadius, 12, 12]} />
+                                <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.5} />
+                            </mesh>
+                            <Billboard position={[dir.x * labelDistance, dir.y * labelDistance, dir.z * labelDistance]}>
+                                <Text
+                                    fontSize={labelSize}
+                                    color={color}
+                                    anchorX="center"
+                                    anchorY="middle"
+                                >
+                                    {label}
+                                </Text>
+                            </Billboard>
+                        </group>
+                    );
+                })}
+            </group>
+        </>
+    );
+}
+
+function Scene({ sphereData, focusPosition, isPlayMode, onUserInteract, controlSignals = [], cameraQuaternionRef }) {
     const controlsRef = useRef();
     const [activeSignals, setActiveSignals] = useState([]);
     const signalIdRef = useRef(0);
@@ -664,6 +755,7 @@ function Scene({ sphereData, focusPosition, isPlayMode, onUserInteract, controlS
             <pointLight position={[10, 10, 10]} intensity={1} />
             <pointLight position={[-10, -10, -10]} intensity={0.3} />
             <CameraController focusPosition={focusPosition} controlsRef={controlsRef} />
+            <CameraQuaternionReporter cameraQuaternionRef={cameraQuaternionRef} />
             {sphereData.map(data => (
                 <SingleBlochSphere
                     key={data.originalIndex}
@@ -719,6 +811,7 @@ export default function BlochSphereView({ qubitBranches, visibility, focusQubit,
     const numVisible = visibility.filter(v => v).length;
     const spacing = 3.5;
     const [userInteracted, setUserInteracted] = useState(false);
+    const cameraQuaternionRef = useRef(new THREE.Quaternion());
 
     // Reset user interaction flag when focus changes
     useEffect(() => {
@@ -762,8 +855,18 @@ export default function BlochSphereView({ qubitBranches, visibility, focusQubit,
                     isPlayMode={isPlaying}
                     onUserInteract={handleUserInteract}
                     controlSignals={controlSignals}
+                    cameraQuaternionRef={cameraQuaternionRef}
                 />
             </Canvas>
+            <div style={AXIS_WIDGET_STYLE}>
+                <Canvas
+                    camera={{ position: [0, 0, 3.2], fov: 35, near: 0.1, far: 20 }}
+                    gl={{ alpha: true }}
+                    onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}
+                >
+                    <AxisOverlayWidget cameraQuaternionRef={cameraQuaternionRef} />
+                </Canvas>
+            </div>
         </div>
     );
 }
