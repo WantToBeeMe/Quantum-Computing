@@ -15,7 +15,9 @@ import {
   extractRotationFromMatrix,
   getMultiQubitProbabilities,
   stateToBlochCoords,
-  getProbabilities
+  getProbabilities,
+  cAbs,
+  cPhase
 } from './quantum';
 import './App.css';
 
@@ -50,11 +52,6 @@ function App() {
   }, [totalFrames]);
 
   // Get gates up to a certain animation frame
-  // Frame 0 = no gates
-  // Frame 1 = gates before first barrier (slot index < barriers[0])
-  // Frame 2 = gates before second barrier, etc.
-  // Frame barrierCount+1 = all gates
-  // Returns array of gate objects sorted by slot
   const getOrderedGates = useCallback((qubitIndex, frame) => {
     const row = circuits[qubitIndex] || [];
     const sortedBarriers = [...barriers].sort((a, b) => a - b);
@@ -63,53 +60,72 @@ function App() {
     const entries = row.map((gate, slot) => ({ gate: gate ? { ...gate, slot } : null, slot })).filter(e => e.gate);
     entries.sort((a, b) => a.slot - b.slot);
 
-    if (frame === 0) {
-      // No gates - initial state
-      return [];
-    }
+    if (frame === 0) return [];
+    if (frame > barrierCount) return entries.map(e => e.gate);
 
-    if (frame > barrierCount) {
-      // All gates - final state
-      return entries.map(e => e.gate);
-    }
-
-    // Frame 1..barrierCount: show gates BEFORE barrier at index (frame-1)
     const barrierSlot = sortedBarriers[frame - 1];
-    if (barrierSlot === undefined) {
-      return entries.map(e => e.gate);
-    }
-
-    // Include gates whose slot is LESS than the barrier slot
+    if (barrierSlot === undefined) return entries.map(e => e.gate);
     return entries.filter(e => e.slot < barrierSlot).map(e => e.gate);
   }, [circuits, barriers, barrierCount]);
+
+  // ── Column state cache for phase kickback detection ──
+  // Builds stateAtColumn[qi][slot] = state of qubit qi up to (not including) slot
+  const buildColumnStateCache = useCallback((frame) => {
+    const numQubits = circuits.length;
+    // Find max slot across all qubits
+    let maxSlot = 0;
+    circuits.forEach(row => {
+      row.forEach((g, s) => { if (g) maxSlot = Math.max(maxSlot, s); });
+    });
+
+    const cache = [];
+    for (let qi = 0; qi < numQubits; qi++) {
+      const gateList = getOrderedGates(qi, frame);
+      // Build column->state mapping
+      const statesAtSlot = {};
+      let state = STATE_ZERO();
+      statesAtSlot[-1] = state; // before any gate
+
+      // Process gates sorted by slot
+      const sortedGates = [...gateList].sort((a, b) => a.slot - b.slot);
+      for (let s = 0; s <= maxSlot + 1; s++) {
+        statesAtSlot[s] = [...state]; // state BEFORE applying gate at slot s
+        const gateAtSlot = sortedGates.find(g => g.slot === s);
+        if (gateAtSlot && gateAtSlot.gate !== 'BARRIER' && gateAtSlot.gate !== 'CONTROL') {
+          // Only apply non-controlled version OR skip controlled gates here
+          // For state cache, apply the gate unconditionally (used to detect what the qubit looks like at this point)
+          state = applyGate(state, gateAtSlot);
+        }
+      }
+      cache.push(statesAtSlot);
+    }
+    return cache;
+  }, [circuits, getOrderedGates]);
 
   // Calculate branches with rotation history
   const qubitBranches = useMemo(() => {
     const frame = animationFrame < 0 ? totalFrames - 1 : animationFrame;
 
-    // Helper to get control qubit state at a specific slot
-    const getControlStateAtSlot = (ctrlQubit, maxSlot) => {
-      const ctrlGates = getOrderedGates(ctrlQubit, totalFrames - 1); // Get all gates
-      let state = STATE_ZERO();
-      for (const g of ctrlGates) {
-        if (g.slot <= maxSlot && g.gate !== 'BARRIER') {
-          state = applyGate(state, g);
-        }
-      }
-      return state;
+    // Build column state cache for phase kickback detection
+    const stateCache = buildColumnStateCache(frame);
+
+    // Helper to get control qubit state at a specific slot from cache
+    const getControlStateAtSlot = (ctrlQubit, slot) => {
+      const qubitCache = stateCache[ctrlQubit];
+      if (!qubitCache) return STATE_ZERO();
+      return qubitCache[slot] || STATE_ZERO();
     };
 
     return circuits.map((_, qi) => {
       const gates = getOrderedGates(qi, frame);
-      const controlledGate = gates.find(g => g.controlIndex !== undefined && g.controlIndex !== null);
+      const controlledGate = gates.find(g => g.controlIndex !== undefined && g.controlIndex !== null && g.gate !== 'CONTROL');
       const hasControl = !!controlledGate;
 
       // Build rotations from decomposition (for visualization)
       const buildRotations = (gateList) => {
         const rotations = [];
         for (const gate of gateList) {
-          if (gate.gate === 'BARRIER') continue;
-          // Use decomposition directly - already stored on gate
+          if (gate.gate === 'BARRIER' || gate.gate === 'CONTROL') continue;
           const decomp = gate.decomposition;
           if (decomp) {
             const { theta, phi, lambda } = decomp;
@@ -127,7 +143,7 @@ function App() {
       // Apply gates using matrix multiplication
       const applyGates = (gateList, state) => {
         for (const gate of gateList) {
-          if (gate.gate === 'BARRIER') continue;
+          if (gate.gate === 'BARRIER' || gate.gate === 'CONTROL') continue;
           state = applyGate(state, gate);
         }
         return state;
@@ -139,26 +155,23 @@ function App() {
         const rotations = buildRotations(gates);
         return [{ state, coords: stateToBlochCoords(state), probability: 1, rotations }];
       } else {
-        // Find all controlled gates
-        const controlledGates = gates.filter(g => g.controlIndex !== undefined && g.controlIndex !== null);
+        // Find all controlled gates (exclude CONTROL placeholder nodes)
+        const controlledGates = gates.filter(g => g.controlIndex !== undefined && g.controlIndex !== null && g.gate !== 'CONTROL');
         const uniqueControls = [...new Set(controlledGates.map(g => g.controlIndex))];
 
-        // Enumerate all combinations of control states (0 or 1 for each control qubit)
         const numControls = uniqueControls.length;
         const numCombinations = Math.pow(2, numControls);
 
         // Get probabilities for each control qubit being in |1⟩
         const controlProbs = uniqueControls.map(ctrlIdx => {
-          // Find earliest controlled gate for this control
           const ctrlGate = controlledGates.find(g => g.controlIndex === ctrlIdx);
-          const ctrlState = getControlStateAtSlot(ctrlIdx, ctrlGate.slot - 1);
+          const ctrlState = getControlStateAtSlot(ctrlIdx, ctrlGate.slot);
           return getProbabilities(ctrlState).prob1;
         });
 
         const branches = [];
 
         for (let combo = 0; combo < numCombinations && branches.length < 10; combo++) {
-          // Build control state map for this combination
           const controlActive = {};
           let probability = 1;
 
@@ -168,11 +181,10 @@ function App() {
             probability *= isActive ? controlProbs[i] : (1 - controlProbs[i]);
           }
 
-          // Skip low-probability branches
           if (probability < 0.01) continue;
 
-          // Build gate list for this control combination
           const activeGates = gates.filter(g => {
+            if (g.gate === 'CONTROL') return false;
             if (g.controlIndex === undefined || g.controlIndex === null) return true;
             return controlActive[g.controlIndex];
           });
@@ -197,7 +209,6 @@ function App() {
             Math.abs(c1.z - c2.z) < tol;
         };
 
-        // Calculate total rotation angles from rotations (normalized to -π to π)
         const normalizeAngle = (a) => {
           while (a > Math.PI) a -= 2 * Math.PI;
           while (a < -Math.PI) a += 2 * Math.PI;
@@ -240,7 +251,6 @@ function App() {
           }
         }
 
-        // Sort by probability descending, limit to 10
         mergedBranches.sort((a, b) => b.probability - a.probability);
         if (mergedBranches.length > 10) mergedBranches.length = 10;
 
@@ -252,22 +262,44 @@ function App() {
         }];
       }
     });
-  }, [circuits, animationFrame, totalFrames, getOrderedGates]);
+  }, [circuits, animationFrame, totalFrames, getOrderedGates, buildColumnStateCache]);
 
   const qubitStates = useMemo(() => qubitBranches.map(b => b.reduce((a, c) => c.probability > a.probability ? c : a).state), [qubitBranches]);
   const probabilities = useMemo(() => getMultiQubitProbabilities(qubitStates, false), [qubitStates]);
   const allProbabilities = useMemo(() => getMultiQubitProbabilities(qubitStates, true), [qubitStates]);
 
+  // ── Phase kickback detection using column state cache ──
+  const detectPhaseKickback = useCallback((targetGate, controlQubit, slot, frame) => {
+    // Get the control qubit's state at this slot
+    const stateCache = buildColumnStateCache(frame);
+    const ctrlStateBefore = stateCache[controlQubit]?.[slot] || STATE_ZERO();
+
+    // Check if control qubit is in superposition (has non-zero |1⟩ component)
+    const prob1 = cAbs(ctrlStateBefore[1]) ** 2;
+    if (prob1 < 0.01) return false; // Control is |0⟩, no kickback possible
+
+    // Check if the target gate applies a phase to |1⟩ of the target qubit
+    // Phase kickback occurs when the gate has a non-trivial phase (lambda or phi)
+    const decomp = targetGate.decomposition;
+    if (!decomp) return false;
+
+    // A controlled gate causes kickback when:
+    // 1. The control qubit has a |1⟩ component AND
+    // 2. The target gate introduces a relative phase (lambda != 0 or it's a Z-type gate)
+    const hasPhaseEffect = Math.abs(decomp.lambda) > 0.01 ||
+      ['Z', 'S', 'T'].includes(targetGate.gate);
+
+    return hasPhaseEffect;
+  }, [buildColumnStateCache]);
+
   // Compute active control signals for current animation frame
   const activeControlSignals = useMemo(() => {
-    // Frame 0 is initial state (no gates), frame -1 is not playing
     if (!isPlaying || animationFrame <= 0) return [];
 
     const signals = [];
     const frame = animationFrame;
     const sortedBarriers = [...barriers].sort((a, b) => a - b);
 
-    // Find which slot range is active for this frame
     let minSlot = 0;
     let maxSlot = Infinity;
     if (frame > 0 && frame <= sortedBarriers.length) {
@@ -280,11 +312,9 @@ function App() {
     // Find controlled gates in the active slot range
     circuits.forEach((row, qIdx) => {
       row.forEach((gate, slot) => {
-        if (gate && gate.controlIndex !== undefined && gate.controlIndex !== null) {
+        if (gate && gate.controlIndex !== undefined && gate.controlIndex !== null && gate.gate !== 'CONTROL') {
           if (slot >= minSlot && slot < maxSlot) {
-            // Check if this gate causes phase kickback (Z-type gates: Z, S, T, or gates with lambda rotation)
-            const hasKickback = ['Z', 'S', 'T'].includes(gate.gate) ||
-              (gate.decomposition && Math.abs(gate.decomposition.lambda) > 0.01);
+            const hasKickback = detectPhaseKickback(gate, gate.controlIndex, slot, frame);
             signals.push({ from: gate.controlIndex, to: qIdx, hasKickback });
           }
         }
@@ -292,12 +322,11 @@ function App() {
     });
 
     return signals;
-  }, [circuits, barriers, animationFrame, isPlaying]);
+  }, [circuits, barriers, animationFrame, isPlaying, detectPhaseKickback]);
 
   // Handler for control signals triggered from GateSettings
-  const handleControlSignal = useCallback((fromQubit, toQubit) => {
-    setConfigControlSignals([{ from: fromQubit, to: toQubit }]);
-    // Clear after a brief moment (signal will self-destruct)
+  const handleControlSignal = useCallback((fromQubit, toQubit, hasKickback = false) => {
+    setConfigControlSignals([{ from: fromQubit, to: toQubit, hasKickback }]);
     setTimeout(() => setConfigControlSignals([]), 50);
   }, []);
 
@@ -306,30 +335,35 @@ function App() {
     return [...activeControlSignals, ...configControlSignals];
   }, [activeControlSignals, configControlSignals]);
 
+  // ── Helper: shift ALL qubit threads right from a given slot ──
+  const shiftAllColumnsRight = (circuitRows, fromSlot) => {
+    return circuitRows.map(row => {
+      const newRow = [...row];
+      for (let s = newRow.length; s > fromSlot; s--) {
+        newRow[s] = newRow[s - 1];
+      }
+      newRow[fromSlot] = null;
+      return newRow;
+    });
+  };
+
+  // ── Insert gate: column-synchronized ──
   const handleInsertGate = useCallback((qi, si, gate) => {
     const isOccupied = circuits[qi] && circuits[qi][si];
 
     setCircuits(prev => {
-      const next = prev.map(r => [...r]);
+      let next = prev.map(r => [...r]);
       if (isOccupied) {
-        // Shift gates
-        for (let q = 0; q < next.length; q++) {
-          const newRow = [];
-          for (let s = 0; s <= Math.max(si, next[q].length); s++) {
-            if (s < si) newRow[s] = next[q][s];
-            else if (s === si) newRow[s] = q === qi ? gate : next[q][s];
-            else newRow[s] = next[q][s - (q === qi ? 0 : 0)];
-          }
-          if (q === qi) {
-            for (let s = si + 1; s <= next[q].length + 1; s++) {
-              if (next[q][s - 1]) newRow[s] = next[q][s - 1];
-            }
-          }
-          next[q] = newRow;
-        }
-      } else {
-        next[qi][si] = gate;
+        // Shift ALL qubit threads right from this slot
+        next = shiftAllColumnsRight(next, si);
+        // Also shift any control references for gates at or after si
+        next = next.map(row => row.map((g, s) => {
+          if (!g) return g;
+          // No need to remap controlIndex (it's a qubit index, not a slot)
+          return g;
+        }));
       }
+      next[qi][si] = gate;
       return next;
     });
 
@@ -342,10 +376,28 @@ function App() {
     setSelectedGate({ qubitIndex: qi, slotIndex: si, gate });
   }, [circuits]);
 
+  // ── Remove gate: handles control pairing ──
   const handleRemoveGate = useCallback((qi, si) => {
     setCircuits(prev => {
       const next = prev.map(r => [...r]);
-      delete next[qi][si];
+      const gate = next[qi][si];
+      if (!gate) return prev;
+
+      if (gate.gate === 'CONTROL') {
+        // Removing a control dot: remove controlled config from target gate
+        const targetQi = gate.targetIndex;
+        if (next[targetQi] && next[targetQi][si] && next[targetQi][si].controlIndex === qi) {
+          next[targetQi][si] = { ...next[targetQi][si], controlIndex: null };
+        }
+      } else if (gate.controlIndex !== undefined && gate.controlIndex !== null) {
+        // Removing a target gate with a control: also remove the control dot
+        const ctrlQi = gate.controlIndex;
+        if (next[ctrlQi] && next[ctrlQi][si] && next[ctrlQi][si].gate === 'CONTROL' && next[ctrlQi][si].targetIndex === qi) {
+          next[ctrlQi][si] = null;
+        }
+      }
+
+      next[qi][si] = null;
       return next;
     });
     setSelectedGate(null);
@@ -360,21 +412,94 @@ function App() {
     setIsPlaying(false);
   }, []);
 
+  // ── Update gate: handles control placement/removal with column sync ──
   const handleUpdateGate = useCallback((qi, si, newGate) => {
     setCircuits(prev => {
-      const next = prev.map(r => [...r]);
-      next[qi][si] = newGate;
+      let next = prev.map(r => [...r]);
+      const oldGate = prev[qi][si];
+
+      // --- Remove old control dot if control is changing or being removed ---
+      if (oldGate && oldGate.controlIndex !== undefined && oldGate.controlIndex !== null) {
+        const oldCtrlQi = oldGate.controlIndex;
+        // Only remove if the new gate has a different control or no control
+        if (newGate.controlIndex === null || newGate.controlIndex === undefined ||
+          newGate.controlIndex !== oldCtrlQi) {
+          if (next[oldCtrlQi] && next[oldCtrlQi][si] && next[oldCtrlQi][si].gate === 'CONTROL') {
+            next[oldCtrlQi][si] = null;
+          }
+        }
+      }
+
+      // --- Place new control dot ---
+      if (newGate.controlIndex !== undefined && newGate.controlIndex !== null) {
+        const ctrlQi = newGate.controlIndex;
+
+        // Check collision at the control qubit's slot
+        const existingAtCtrl = next[ctrlQi][si];
+        const isOurControlNode = existingAtCtrl && existingAtCtrl.gate === 'CONTROL' && existingAtCtrl.targetIndex === qi;
+
+        if (existingAtCtrl && !isOurControlNode) {
+          // Collision! Remove target gate first so it doesn't get shifted to si+1
+          next[qi][si] = null;
+          // Shift ALL threads right from this slot
+          next = shiftAllColumnsRight(next, si);
+          // After shift: slot si is now empty, old content at si moved to si+1
+          // Place the target gate and control dot at si (the freed slot)
+          next[qi][si] = newGate;
+          next[ctrlQi][si] = { gate: 'CONTROL', targetIndex: qi, controlIndex: null };
+          // Update barriers
+          setBarriers(b => b.map(bi => bi >= si ? bi + 1 : bi));
+          // Selected gate stays at si
+          setSelectedGate(prev => prev ? { ...prev, gate: newGate } : null);
+          return next;
+        } else {
+          // No collision: place directly
+          next[qi][si] = newGate;
+          next[ctrlQi][si] = { gate: 'CONTROL', targetIndex: qi, controlIndex: null };
+        }
+      } else {
+        // Not controlled
+        next[qi][si] = newGate;
+      }
+
       return next;
     });
+
+    // Update selected gate reference
     setSelectedGate(prev => prev ? { ...prev, gate: newGate } : null);
-  }, []);
+  }, [circuits]);
 
   const handleGateClick = useCallback((qi, si, g) => {
+    if (qi === null && si === null) {
+      setSelectedGate(null);
+      return;
+    }
     if (qi === -1) setSelectedGate({ isBarrier: true, slot: si });
     else setSelectedGate({ qubitIndex: qi, slotIndex: si, gate: g });
   }, []);
 
-  const handleGateMiddleClick = useCallback((qi, si) => handleRemoveGate(qi, si), [handleRemoveGate]);
+  const handleGateMiddleClick = useCallback((qi, si) => {
+    // Check if this is a control dot
+    const gate = circuits[qi]?.[si];
+    if (gate?.gate === 'CONTROL') {
+      // Middle-click on control dot: remove controlled config from target, remove control dot
+      const targetQi = gate.targetIndex;
+      setCircuits(prev => {
+        const next = prev.map(r => [...r]);
+        // Remove controlled config from target
+        if (next[targetQi] && next[targetQi][si]) {
+          next[targetQi][si] = { ...next[targetQi][si], controlIndex: null };
+        }
+        // Remove control dot
+        next[qi][si] = null;
+        return next;
+      });
+      setSelectedGate(null);
+      return;
+    }
+    // Normal gate: remove it
+    handleRemoveGate(qi, si);
+  }, [circuits, handleRemoveGate]);
 
   const handleAddBarrier = useCallback((si) => {
     setBarriers(prev => prev.includes(si) ? prev : [...prev, si].sort((a, b) => a - b));
@@ -382,35 +507,135 @@ function App() {
     setIsPlaying(false);
   }, []);
 
+  // ── Move gate: handles control pairing, cross-qubit rules ──
+  // Moving a CONTROL dot moves the entire pair (target + control).
+  // Moving a target with control also moves the control dot.
+  // If EITHER destination slot is occupied, shift ALL threads right.
   const handleMoveGate = useCallback((fromQi, fromSi, toQi, toSi) => {
     setCircuits(prev => {
-      const next = prev.map(r => [...r]);
+      let next = prev.map(r => [...r]);
       let gate = next[fromQi][fromSi];
       if (!gate) return prev;
 
-      // Remove control if moving to control qubit's row
-      if (gate.controlIndex !== undefined && gate.controlIndex !== null && gate.controlIndex === toQi) {
-        gate = { ...gate, controlIndex: null };
-      }
+      const isControlNode = gate.gate === 'CONTROL';
 
-      // Remove from old position
-      delete next[fromQi][fromSi];
+      if (isControlNode) {
+        // ── Moving a CONTROL dot = move the whole pair ──
+        // The user dragged the control dot. We treat this as moving the
+        // target gate to the destination column, with the control dot
+        // following on the toQi thread.
+        const targetQi = gate.targetIndex;
+        const targetGate = next[targetQi]?.[fromSi];
+        if (!targetGate) return prev;
 
-      // If target is occupied, shift
-      if (next[toQi][toSi]) {
-        // Shift gates at toQi from toSi onwards
-        for (let s = next[toQi].length; s > toSi; s--) {
-          if (next[toQi][s - 1]) {
-            next[toQi][s] = next[toQi][s - 1];
+        // If dropping to a different qubit on the same column, just reassign control
+        if (toSi === fromSi && toQi !== fromQi) {
+          if (toQi === targetQi) {
+            // Moving control dot to same qubit as target → disable controlled
+            next[fromQi][fromSi] = null;
+            next[targetQi][fromSi] = { ...targetGate, controlIndex: null };
+            return next;
           }
+          // Different qubit, same column — check if toQi slot is free
+          if (next[toQi][fromSi] && next[toQi][fromSi] !== gate) {
+            // Occupied: shift all right
+            next = shiftAllColumnsRight(next, fromSi);
+            setBarriers(b => b.map(bi => bi >= fromSi ? bi + 1 : bi));
+            // Everything at fromSi shifted to fromSi+1
+            next[toQi][fromSi + 1] = { gate: 'CONTROL', targetIndex: targetQi, controlIndex: null };
+            next[targetQi][fromSi + 1] = { ...next[targetQi][fromSi + 1], controlIndex: toQi };
+          } else {
+            // Free: place directly
+            next[fromQi][fromSi] = null;
+            next[toQi][fromSi] = { gate: 'CONTROL', targetIndex: targetQi, controlIndex: null };
+            next[targetQi][fromSi] = { ...targetGate, controlIndex: toQi };
+          }
+          return next;
         }
-        setBarriers(b => b.map(bi => bi >= toSi ? bi + 1 : bi));
+
+        // Different column: move the entire pair (target + control) to the new column
+        const ctrlQi = toQi; // Control goes to the qubit we dropped on
+        const tgtQi = targetQi; // Target stays on its own qubit
+
+        // Remove both from old positions
+        next[fromQi][fromSi] = null;
+        next[tgtQi][fromSi] = null;
+
+        // Check if moving control to same qubit as target
+        if (ctrlQi === tgtQi) {
+          // Disable controlled, just move the target gate
+          const movedGate = { ...targetGate, controlIndex: null };
+          if (next[tgtQi][toSi]) {
+            next = shiftAllColumnsRight(next, toSi);
+            setBarriers(b => b.map(bi => bi >= toSi ? bi + 1 : bi));
+          }
+          next[tgtQi][toSi] = movedGate;
+          setSelectedGate({ qubitIndex: tgtQi, slotIndex: toSi, gate: movedGate });
+          return next;
+        }
+
+        // Check BOTH destination slots
+        const tgtOccupied = next[tgtQi][toSi] != null;
+        const ctrlOccupied = next[ctrlQi][toSi] != null;
+
+        if (tgtOccupied || ctrlOccupied) {
+          // At least one slot is occupied: shift ALL right to make room
+          next = shiftAllColumnsRight(next, toSi);
+          setBarriers(b => b.map(bi => bi >= toSi ? bi + 1 : bi));
+        }
+
+        // Place target gate and control dot at the (now empty) destination
+        const movedGate = { ...targetGate, controlIndex: ctrlQi };
+        next[tgtQi][toSi] = movedGate;
+        next[ctrlQi][toSi] = { gate: 'CONTROL', targetIndex: tgtQi, controlIndex: null };
+        setSelectedGate({ qubitIndex: tgtQi, slotIndex: toSi, gate: movedGate });
+        return next;
       }
 
-      next[toQi][toSi] = gate;
+      // ── Moving a regular gate ──
+      const hasControl = gate.controlIndex !== undefined && gate.controlIndex !== null;
+      const ctrlQi = hasControl ? gate.controlIndex : null;
+      let ctrlGate = hasControl ? next[ctrlQi]?.[fromSi] : null;
+
+      // Remove gate from old position
+      next[fromQi][fromSi] = null;
+      // Remove paired control dot from old position
+      if (hasControl && ctrlGate) {
+        next[ctrlQi][fromSi] = null;
+      }
+
+      // Check if moving to the same qubit as control → disable controlled
+      if (hasControl && toQi === ctrlQi) {
+        gate = { ...gate, controlIndex: null };
+        ctrlGate = null;
+      }
+
+      if (!hasControl || !ctrlGate) {
+        // No control pairing — simple move
+        if (next[toQi][toSi]) {
+          next = shiftAllColumnsRight(next, toSi);
+          setBarriers(b => b.map(bi => bi >= toSi ? bi + 1 : bi));
+        }
+        next[toQi][toSi] = gate;
+      } else {
+        // Has control: check BOTH destination slots
+        const tgtOccupied = next[toQi][toSi] != null;
+        const ctrlOccupied = next[ctrlQi][toSi] != null;
+
+        if (tgtOccupied || ctrlOccupied) {
+          // At least one slot is occupied: shift ALL right to make room
+          next = shiftAllColumnsRight(next, toSi);
+          setBarriers(b => b.map(bi => bi >= toSi ? bi + 1 : bi));
+        }
+
+        // Place both at the (now empty) destination column
+        next[toQi][toSi] = gate;
+        next[ctrlQi][toSi] = { ...ctrlGate, targetIndex: toQi };
+      }
+
       return next;
     });
-    setSelectedGate({ qubitIndex: toQi, slotIndex: toSi });
+    setSelectedGate(prev => ({ ...prev, qubitIndex: toQi, slotIndex: toSi }));
     setAnimationFrame(-1);
     setIsPlaying(false);
   }, []);
@@ -426,15 +651,26 @@ function App() {
     if (circuits.length <= 1) return;
     setCircuits(prev => {
       const next = prev.filter((_, i) => i !== qi);
-      // Clean up control configs: remove if control points to removed qubit, remap indices
+      // Clean up control configs and CONTROL gates
       return next.map((row, newQi) =>
         row.map(gate => {
-          if (!gate || gate.controlIndex === undefined || gate.controlIndex === null) return gate;
+          if (!gate) return gate;
+
+          // Remove CONTROL gates pointing to removed qubit
+          if (gate.gate === 'CONTROL') {
+            const originalTarget = gate.targetIndex;
+            if (originalTarget === qi) return null; // Target was removed
+            return {
+              ...gate,
+              targetIndex: originalTarget > qi ? originalTarget - 1 : originalTarget
+            };
+          }
+
+          // Update controlIndex
+          if (gate.controlIndex === undefined || gate.controlIndex === null) return gate;
           if (gate.controlIndex === qi) {
-            // Control was pointing to removed qubit - remove control
             return { ...gate, controlIndex: null };
           }
-          // Remap control qubit index
           return {
             ...gate,
             controlIndex: gate.controlIndex > qi ? gate.controlIndex - 1 : gate.controlIndex

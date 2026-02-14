@@ -59,6 +59,36 @@ export default function CircuitBuilder({
         return (slot) => slot < barrierSlot;
     }, [isPlaying, animationFrame, sortedBarriers]);
 
+    // Build a map of control relationships for selection pairing
+    const controlPairMap = useMemo(() => {
+        const pairs = {}; // key: "qi-si" -> paired "qi-si"
+        circuits.forEach((row, qi) => {
+            row.forEach((gate, si) => {
+                if (!gate) return;
+                if (gate.gate === 'CONTROL' && gate.targetIndex !== undefined) {
+                    // Control dot at (qi, si) pairs with target at (gate.targetIndex, si)
+                    pairs[`${qi}-${si}`] = { qubit: gate.targetIndex, slot: si };
+                    pairs[`${gate.targetIndex}-${si}`] = { qubit: qi, slot: si };
+                } else if (gate.controlIndex !== undefined && gate.controlIndex !== null) {
+                    // Target gate at (qi, si) pairs with control at (gate.controlIndex, si)
+                    pairs[`${qi}-${si}`] = { qubit: gate.controlIndex, slot: si };
+                    pairs[`${gate.controlIndex}-${si}`] = { qubit: qi, slot: si };
+                }
+            });
+        });
+        return pairs;
+    }, [circuits]);
+
+    // Check if a gate is "paired-selected" (its partner is the currently selected gate)
+    const isPairedSelected = (qi, si) => {
+        if (!selectedGate || selectedGate.isBarrier) return false;
+        const selKey = `${selectedGate.qubitIndex}-${selectedGate.slotIndex}`;
+        const thisKey = `${qi}-${si}`;
+        const pair = controlPairMap[selKey];
+        if (pair && pair.qubit === qi && pair.slot === si) return true;
+        return false;
+    };
+
     // Handle drag over circuit area
     const handleCircuitDragOver = (e) => {
         e.preventDefault();
@@ -172,6 +202,65 @@ export default function CircuitBuilder({
         setIsDraggingGate(true);
     };
 
+    // Handle clicking on a gate — if it's a CONTROL node, select the target gate instead
+    const handleGateClickInternal = (qi, si, gate) => {
+        if (isPlaying) return;
+
+        if (gate.gate === 'CONTROL') {
+            // Click on control dot → select the target gate
+            const targetQi = gate.targetIndex;
+            const targetGate = circuits[targetQi]?.[si];
+            if (targetGate) {
+                // If already selected, deselect
+                if (selectedGate?.qubitIndex === targetQi && selectedGate?.slotIndex === si) {
+                    onGateClick(null, null, null);
+                } else {
+                    onGateClick(targetQi, si, targetGate);
+                }
+            }
+            return;
+        }
+
+        // Toggle selection: click again to deselect
+        if (selectedGate?.qubitIndex === qi && selectedGate?.slotIndex === si) {
+            onGateClick(null, null, null);
+        } else {
+            onGateClick(qi, si, gate);
+        }
+    };
+
+    // Handle middle-click on control dot: remove control config
+    const handleGateMiddleClickInternal = (qi, si) => {
+        if (isPlaying) return;
+        const gate = circuits[qi]?.[si];
+        if (gate?.gate === 'CONTROL') {
+            // Middle-click on control dot → remove controlled config from target
+            // Pass the control qubit index and slot so App can handle it
+            onGateMiddleClick(qi, si);
+            return;
+        }
+        onGateMiddleClick(qi, si);
+    };
+
+    // Build control line data for CSS-based vertical lines
+    const controlLines = useMemo(() => {
+        const lines = [];
+        circuits.forEach((row, qi) => {
+            row.forEach((gate, si) => {
+                if (!gate || gate.controlIndex === undefined || gate.controlIndex === null) return;
+                if (gate.gate === 'CONTROL') return; // Don't draw from control dot, draw from target
+                const ctrlQ = gate.controlIndex;
+                lines.push({
+                    slot: si,
+                    targetQubit: qi,
+                    controlQubit: ctrlQ,
+                    key: `ctrl-line-${qi}-${si}`
+                });
+            });
+        });
+        return lines;
+    }, [circuits]);
+
     return (
         <div className="circuit-builder">
             <div className="circuit-header">
@@ -221,25 +310,30 @@ export default function CircuitBuilder({
                                 <div key={qi} className={`qubit-track ${isPlaying ? 'animating' : ''}`} style={{ '--row': qi }} />
                             ))}
 
-                            {/* Control lines (SVG underneath) */}
-                            <svg className="control-lines-svg" style={{ width: slots.length * slotWidth, height: totalHeight }}>
-                                {circuits.map((row, qi) =>
-                                    row.map((gate, si) => {
-                                        if (!gate || gate.controlIndex === undefined || gate.controlIndex === null) return null;
-                                        const ctrlQ = gate.controlIndex;
-                                        const gateY = qi * rowHeight + rowHeight / 2;
-                                        const ctrlY = ctrlQ * rowHeight + rowHeight / 2;
-                                        const gateX = si * slotWidth + slotWidth / 2;
-
-                                        return (
-                                            <g key={`ctrl-${qi}-${si}`}>
-                                                <line x1={gateX} y1={gateY} x2={gateX} y2={ctrlY} stroke="#ff9900" strokeWidth="2" />
-                                                <circle cx={gateX} cy={ctrlY} r="5" fill="#ff9900" />
-                                            </g>
-                                        );
-                                    })
-                                )}
-                            </svg>
+                            {/* CSS-based control lines (vertical connections) */}
+                            {controlLines.map(({ slot, targetQubit, controlQubit, key }) => {
+                                const topQ = Math.min(targetQubit, controlQubit);
+                                const bottomQ = Math.max(targetQubit, controlQubit);
+                                const topY = topQ * rowHeight + rowHeight / 2;
+                                const bottomY = bottomQ * rowHeight + rowHeight / 2;
+                                const lineX = slot * slotWidth + slotWidth / 2;
+                                return (
+                                    <div
+                                        key={key}
+                                        className="control-line"
+                                        style={{
+                                            position: 'absolute',
+                                            left: `${lineX - 1}px`,
+                                            top: `${topY}px`,
+                                            width: '2px',
+                                            height: `${bottomY - topY}px`,
+                                            background: '#ff9900',
+                                            pointerEvents: 'none',
+                                            zIndex: 1
+                                        }}
+                                    />
+                                );
+                            })}
 
                             {/* Barriers */}
                             {barriers.map((slotIdx, bIdx) => (
@@ -285,29 +379,22 @@ export default function CircuitBuilder({
                                     const isBeingDragged = isDraggingExisting?.qubit === qi && isDraggingExisting?.slot === si;
                                     const isAnimated = isGateAnimated(si);
                                     const isDisabled = isPlaying && !isAnimated;
+                                    const pairedSel = isPairedSelected(qi, si);
 
                                     return (
                                         <div
                                             key={`gate-${qi}-${si}`}
-                                            className={`circuit-gate ${isSelected ? 'selected' : ''} ${isBeingDragged ? 'dragging' : ''} ${isDisabled ? 'disabled' : ''}`}
-                                            style={{ '--slot': si, '--row': qi, '--gate-color': gate.color }}
-                                            onClick={() => {
-                                                if (isPlaying) return; // Disable interaction during play
-                                                // Toggle selection: click again to deselect
-                                                if (selectedGate?.qubitIndex === qi && selectedGate?.slotIndex === si) {
-                                                    onGateClick(null, null, null);
-                                                } else {
-                                                    onGateClick(qi, si, gate);
-                                                }
-                                            }}
-                                            onMouseDown={(e) => !isPlaying && e.button === 1 && onGateMiddleClick(qi, si)}
+                                            className={`circuit-gate ${isSelected ? 'selected' : ''} ${isBeingDragged ? 'dragging' : ''} ${isDisabled ? 'disabled' : ''} ${gate.gate === 'CONTROL' ? 'control-node' : ''} ${pairedSel ? 'paired-selected' : ''}`}
+                                            style={{ '--slot': si, '--row': qi, '--gate-color': gate.color || '#ff9900' }}
+                                            onClick={() => handleGateClickInternal(qi, si, gate)}
+                                            onMouseDown={(e) => !isPlaying && e.button === 1 && handleGateMiddleClickInternal(qi, si)}
                                             draggable={!isPlaying}
                                             onDragStart={(e) => !isPlaying && handleGateDragStart(e, qi, si, gate)}
                                             onDragEnd={resetDragState}
-                                            title={`${gate.label}\nDrag to move | Middle-click to remove`}
+                                            title={gate.gate === 'CONTROL' ? `Control for q[${gate.targetIndex}]\nDrag to move | Middle-click to remove` : `${gate.label}\nDrag to move | Middle-click to remove`}
                                         >
-                                            {gate.controlIndex !== undefined && gate.controlIndex !== null && <span className="control-indicator">C</span>}
-                                            {gate.label}
+                                            {gate.gate !== 'CONTROL' && gate.controlIndex !== undefined && gate.controlIndex !== null && <span className="control-indicator">C</span>}
+                                            {gate.gate !== 'CONTROL' ? gate.label : ''}
                                         </div>
                                     );
                                 })

@@ -206,18 +206,71 @@
 
 .control-indicator {
     position: absolute;
-    top: -5px;
-    right: -5px;
+    top: -8px;
+    right: -8px;
     background: #ff9900;
-    color: #0d1117;
-    font-size: 7px;
-    width: 12px;
-    height: 12px;
+    color: white;
+    font-size: 10px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Control node (dot) - takes full gate slot, shows centered circle */
+.circuit-gate.control-node {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: transparent !important;
+    cursor: grab;
+    pointer-events: auto;
+}
+
+/* Override ALL inherited glow states on the outer square */
+.circuit-gate.control-node:hover,
+.circuit-gate.control-node.selected,
+.circuit-gate.control-node.paired-selected {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Hide text content inside control node */
+.circuit-gate.control-node .control-indicator {
+    display: none;
+}
+
+/* The inner circle drawn via ::after */
+.circuit-gate.control-node::after {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #0d1117;
+    border: 2.5px solid #ff9900;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.circuit-gate.control-node:hover::after {
+    box-shadow: 0 0 10px rgba(255, 153, 0, 0.5);
+}
+
+.circuit-gate.control-node.selected::after,
+.circuit-gate.control-node.paired-selected::after {
+    background: #ff9900;
+    box-shadow: 0 0 8px #ff9900, 0 0 14px #ff9900;
+}
+
+/* Paired glow for target gate when its control is selected */
+.circuit-gate.paired-selected:not(.control-node) {
+    box-shadow: 0 0 8px var(--gate-color), 0 0 12px var(--gate-color);
 }
 
 /* Drop highlight for empty slot */

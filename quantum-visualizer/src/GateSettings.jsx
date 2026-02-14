@@ -85,6 +85,23 @@ export default function GateSettings({ gate, gateIndex, qubitIndex, onRemove, on
         );
     }
 
+    if (gate.gate === 'CONTROL') {
+        return (
+            <div className="gate-settings">
+                <div className="settings-header">
+                    <div className="gate-badge control-node" style={{ background: '#ff9900', borderRadius: '50%', width: '20px', height: '20px' }}></div>
+                    <span className="gate-name">Control Node</span>
+                </div>
+                <div className="settings-description">
+                    Controls the gate at Qubit {gate.targetIndex}.
+                </div>
+                <div className="settings-actions">
+                    <button className="action-btn remove" onClick={() => onRemove(qubitIndex, gateIndex)}>Remove Control</button>
+                </div>
+            </div>
+        );
+    }
+
     const gateInfo = GATES[gate.gate] || gate;
     const isParametric = gate.gate === 'U' || gateInfo.showDecomposition;
     const canDecompose = gate.gate !== 'U' && gateInfo.defaultDecomposition;
@@ -125,7 +142,9 @@ export default function GateSettings({ gate, gateIndex, qubitIndex, onRemove, on
             onUpdate(qubitIndex, gateIndex, { ...gate, controlIndex: ctrl });
             // Trigger control signal animation
             if (onControlSignal) {
-                onControlSignal(ctrl, qubitIndex);
+                const hasKickback = ['Z', 'S', 'T'].includes(gate.gate) ||
+                    (gate.decomposition && Math.abs(gate.decomposition.lambda) > 0.01);
+                onControlSignal(ctrl, qubitIndex, hasKickback);
             }
         }
     };

@@ -398,16 +398,17 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
 }
 
 // Animated photon signal between control and target qubit spheres
-// variant: 'control' (orange, curve up) or 'kickback' (light blue, curve down)
-function ControlSignal({ fromPosition, toPosition, onComplete, variant = 'control' }) {
+// variant: 'control' (orange, curve up) or 'kickback' (cyan, curve down)
+function ControlSignal({ fromPosition, toPosition, onComplete, variant = 'control', delay = 0 }) {
     const photonRef = useRef();
     const trailRef = useRef();
     const progressRef = useRef(0);
     const completedRef = useRef(false);
+    const elapsedRef = useRef(0);
     const DURATION = 0.2; // 0.2 second animation
 
     // Colors based on variant
-    const color = variant === 'kickback' ? '#5bc0de' : '#ff9900';
+    const color = variant === 'kickback' ? '#66ffff' : '#ff9900';
     const curveDirection = variant === 'kickback' ? -1 : 1; // -1 = down, 1 = up
 
     // Calculate curve arc height based on distance
@@ -429,6 +430,15 @@ function ControlSignal({ fromPosition, toPosition, onComplete, variant = 'contro
     // Animate photon
     useFrame((state, delta) => {
         if (completedRef.current) return;
+
+        elapsedRef.current += delta;
+
+        // Handle visibility based on delay
+        const isVisible = elapsedRef.current >= delay;
+        if (photonRef.current) photonRef.current.visible = isVisible;
+        if (trailRef.current) trailRef.current.visible = isVisible;
+
+        if (!isVisible) return;
 
         progressRef.current += delta / DURATION;
 
@@ -482,7 +492,7 @@ function ControlSignal({ fromPosition, toPosition, onComplete, variant = 'contro
     return (
         <group>
             {/* Glowing photon */}
-            <mesh ref={photonRef} position={startPoint}>
+            <mesh ref={photonRef} position={startPoint} visible={false}>
                 <sphereGeometry args={[0.12, 12, 12]} />
                 <meshStandardMaterial
                     color={color}
@@ -493,7 +503,7 @@ function ControlSignal({ fromPosition, toPosition, onComplete, variant = 'contro
                 />
             </mesh>
             {/* Trail behind photon */}
-            <line ref={trailRef}>
+            <line ref={trailRef} visible={false}>
                 <bufferGeometry />
                 <lineBasicMaterial color={color} transparent opacity={0.6} linewidth={3} />
             </line>
@@ -573,8 +583,8 @@ function SingleBlochSphere({ branches, position = [0, 0, 0], qubitIndex, isPlayM
                 })} color={AXIS_COLOR} lineWidth={1} transparent opacity={AXIS_OPACITY} />
             ))}
             <Line points={[[-1.2, 0, 0], [1.2, 0, 0]]} color={AXIS_COLOR} lineWidth={1} transparent opacity={0.4} />
-            <AxisLabel position={[1.4, 0, 0]} text="|+⟩" />
-            <AxisLabel position={[-1.4, 0, 0]} text="|−⟩" />
+            <AxisLabel position={[1.4, 0, 0]} text="|−⟩" />
+            <AxisLabel position={[-1.4, 0, 0]} text="|+⟩" />
             <Line points={[[0, 0, -1.2], [0, 0, 1.2]]} color={AXIS_COLOR} lineWidth={1} transparent opacity={0.4} />
             <AxisLabel position={[0, 0, 1.4]} text="|+i⟩" />
             <AxisLabel position={[0, 0, -1.4]} text="|−i⟩" />
@@ -685,6 +695,7 @@ function Scene({ sphereData, focusPosition, isPlayMode, onUserInteract, controlS
                                 fromPosition={toSphere.position}
                                 toPosition={fromSphere.position}
                                 variant="kickback"
+                                delay={0.05}
                             />
                         )}
                     </group>
