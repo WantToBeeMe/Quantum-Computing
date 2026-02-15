@@ -48,7 +48,7 @@ export default function ProbabilityBars({ probabilities, allProbabilities }) {
                 </button>
             </div>
 
-            <div className="prob-container">
+            <div className="prob-container styled-scrollbar">
                 {displayProbs.map(({ state, probability, isOthers }) => (
                     <div key={state} className={`prob-row ${probability < 0.001 ? 'zero-prob' : ''} ${isOthers ? 'others' : ''}`}>
                         <span className="prob-label">|{state}⟩</span>

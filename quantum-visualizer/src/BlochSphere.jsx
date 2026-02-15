@@ -37,11 +37,17 @@ const applyRotation = (vec, axis, angle) => {
     return v;
 };
 
+const getInitialDisplayVector = (initialStateMode = 'zero') => {
+    if (initialStateMode === 'one') return new THREE.Vector3(0, -1, 0);
+    if (initialStateMode === 'plus') return new THREE.Vector3(-1, 0, 0);
+    return new THREE.Vector3(0, 1, 0);
+};
+
 // Get target vector after applying all rotations
 // U-gate rotation is: Rz(phi) * Ry(theta) * Rz(lambda)
 // Applied to |0⟩ starting vector: first lambda (Z), then theta (Y), then phi (Z)
-const getTargetVector = (rotations) => {
-    let v = new THREE.Vector3(0, 1, 0); // |0⟩
+const getTargetVector = (rotations, startVector = new THREE.Vector3(0, 1, 0)) => {
+    let v = startVector.clone();
     for (const rot of rotations) {
         if (rot.isCompound) {
             // U-gate compound rotation: apply in order lambda -> theta -> phi
@@ -64,8 +70,9 @@ const getTargetVector = (rotations) => {
 };
 
 // Animated state arrow with delta animation + phase visualization
-function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = false, isNewBranch = false, depthOffset = 0 }) {
-    const [displayVec, setDisplayVec] = useState(() => new THREE.Vector3(0, 1, 0));
+function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = false, isNewBranch = false, depthOffset = 0, staticSnapshotToken = 0, initialStateMode = 'zero' }) {
+    const initialVec = useMemo(() => getInitialDisplayVector(initialStateMode), [initialStateMode]);
+    const [displayVec, setDisplayVec] = useState(() => getInitialDisplayVector(initialStateMode));
     const [displayLambda, setDisplayLambda] = useState(0); // Track accumulated lambda (blue stick)
     const [displayPhi, setDisplayPhi] = useState(0); // Track accumulated phi (magenta stick)
     const [currentOpacity, setCurrentOpacity] = useState(isNewBranch ? 0 : opacity);
@@ -73,13 +80,14 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
     // Track animation state
     const animatedRotationCount = useRef(0);
     const currentRotationProgress = useRef(0);
-    const baseVec = useRef(new THREE.Vector3(0, 1, 0));
+    const baseVec = useRef(getInitialDisplayVector(initialStateMode));
     const baseLambda = useRef(0);
     const basePhi = useRef(0);
     const prevRotationsSignature = useRef('');
     const isSnapping = useRef(false);
     const wasPlayMode = useRef(false);
     const playStarted = useRef(false);
+    const suppressNextRotationEffect = useRef(false);
 
     // Compute lambda phase from rotations (only lambda values)
     const getTargetLambda = (rots) => {
@@ -107,16 +115,45 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
         }).join('|');
     };
 
+    // Eye-toggle should show the current state immediately, without replaying rotations.
+    useEffect(() => {
+        if (!staticSnapshotToken) return;
+
+        const snapshotVec = getTargetVector(rotations, initialVec);
+        const snapshotLambda = getTargetLambda(rotations);
+        const snapshotPhi = getTargetPhi(rotations);
+        setDisplayVec(snapshotVec);
+        setDisplayLambda(snapshotLambda);
+        setDisplayPhi(snapshotPhi);
+        setCurrentOpacity(opacity);
+
+        baseVec.current = snapshotVec.clone();
+        baseLambda.current = snapshotLambda;
+        basePhi.current = snapshotPhi;
+        animatedRotationCount.current = rotations.length;
+        currentRotationProgress.current = 0;
+        isSnapping.current = false;
+        suppressNextRotationEffect.current = true;
+        playStarted.current = false;
+        wasPlayMode.current = isPlayMode;
+        prevRotationsSignature.current = getRotationSignature(rotations);
+    }, [staticSnapshotToken, rotations, opacity, isPlayMode, initialVec]);
+
     // Handle rotation changes
     useEffect(() => {
+        if (suppressNextRotationEffect.current) {
+            suppressNextRotationEffect.current = false;
+            return;
+        }
+
         const newSignature = getRotationSignature(rotations);
         const oldSignature = prevRotationsSignature.current;
 
         if (isPlayMode && !wasPlayMode.current) {
-            baseVec.current = new THREE.Vector3(0, 1, 0);
+            baseVec.current = initialVec.clone();
             baseLambda.current = 0;
             basePhi.current = 0;
-            setDisplayVec(new THREE.Vector3(0, 1, 0));
+            setDisplayVec(initialVec.clone());
             setDisplayLambda(0);
             setDisplayPhi(0);
             animatedRotationCount.current = 0;
@@ -168,11 +205,11 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
 
         wasPlayMode.current = isPlayMode;
         prevRotationsSignature.current = newSignature;
-    }, [rotations, isPlayMode]);
+    }, [rotations, isPlayMode, initialVec]);
 
     useFrame((_, delta) => {
         const speed = delta * 3;
-        const targetVec = getTargetVector(rotations);
+        const targetVec = getTargetVector(rotations, initialVec);
         const targetLambda = getTargetLambda(rotations);
         const targetPhi = getTargetPhi(rotations);
 
@@ -249,9 +286,8 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
                 }
             }
         } else if (rotations.length === 0) {
-            const zeroVec = new THREE.Vector3(0, 1, 0);
-            if (displayVec.distanceTo(zeroVec) > 0.01) {
-                setDisplayVec(displayVec.clone().lerp(zeroVec, Math.min(speed * 2, 0.15)));
+            if (displayVec.distanceTo(initialVec) > 0.01) {
+                setDisplayVec(displayVec.clone().lerp(initialVec, Math.min(speed * 2, 0.15)));
             }
             if (Math.abs(displayLambda) > 0.01) {
                 setDisplayLambda(prev => prev * 0.9);
@@ -411,6 +447,8 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
 function ControlSignal({ fromPosition, toPosition, onComplete, variant = 'control', delay = 0 }) {
     const photonRef = useRef();
     const trailRef = useRef();
+    const sourcePulseRef = useRef();
+    const targetPulseRef = useRef();
     const progressRef = useRef(0);
     const completedRef = useRef(false);
     const elapsedRef = useRef(0);
@@ -446,6 +484,8 @@ function ControlSignal({ fromPosition, toPosition, onComplete, variant = 'contro
         const isVisible = elapsedRef.current >= delay;
         if (photonRef.current) photonRef.current.visible = isVisible;
         if (trailRef.current) trailRef.current.visible = isVisible;
+        if (sourcePulseRef.current) sourcePulseRef.current.visible = isVisible;
+        if (targetPulseRef.current) targetPulseRef.current.visible = isVisible;
 
         if (!isVisible) return;
 
@@ -458,15 +498,32 @@ function ControlSignal({ fromPosition, toPosition, onComplete, variant = 'contro
         }
 
         const t = progressRef.current;
+        const pulseWave = 0.5 + 0.5 * Math.sin(elapsedRef.current * 18);
         const [x, y, z] = getPointOnCurve(t);
 
         if (photonRef.current) {
             photonRef.current.position.set(x, y, z);
             // Glow brighter in the middle of travel
-            const intensity = 0.8 + Math.sin(t * Math.PI) * 0.4;
+            const intensity = 0.8 + Math.sin(t * Math.PI) * 0.4 + pulseWave * 0.3;
             photonRef.current.material.emissiveIntensity = intensity;
             // Bigger photon: base 0.12, max 0.18
-            photonRef.current.scale.setScalar(0.12 + Math.sin(t * Math.PI) * 0.06);
+            photonRef.current.scale.setScalar(0.11 + Math.sin(t * Math.PI) * 0.05 + pulseWave * 0.01);
+        }
+
+        if (sourcePulseRef.current) {
+            const sourceStrength = Math.max(0, 1 - t * 2.2);
+            const sourceScale = 0.7 + sourceStrength * (0.35 + pulseWave * 0.35);
+            sourcePulseRef.current.scale.setScalar(sourceScale);
+            sourcePulseRef.current.material.opacity = 0.08 + sourceStrength * (0.3 + pulseWave * 0.25);
+            sourcePulseRef.current.material.emissiveIntensity = 0.25 + sourceStrength * (0.7 + pulseWave * 0.5);
+        }
+
+        if (targetPulseRef.current) {
+            const targetStrength = Math.max(0, (t - 0.18) / 0.82);
+            const targetScale = 0.7 + targetStrength * (0.35 + pulseWave * 0.35);
+            targetPulseRef.current.scale.setScalar(targetScale);
+            targetPulseRef.current.material.opacity = 0.08 + targetStrength * (0.3 + pulseWave * 0.25);
+            targetPulseRef.current.material.emissiveIntensity = 0.25 + targetStrength * (0.7 + pulseWave * 0.5);
         }
 
         // Update trail (fade behind photon)
@@ -500,6 +557,29 @@ function ControlSignal({ fromPosition, toPosition, onComplete, variant = 'contro
 
     return (
         <group>
+            {/* Pulse at source and destination nodes */}
+            <mesh ref={sourcePulseRef} position={fromPosition} visible={false}>
+                <sphereGeometry args={[0.11, 14, 14]} />
+                <meshStandardMaterial
+                    color={color}
+                    emissive={color}
+                    emissiveIntensity={0.9}
+                    transparent
+                    opacity={0.3}
+                    depthWrite={false}
+                />
+            </mesh>
+            <mesh ref={targetPulseRef} position={toPosition} visible={false}>
+                <sphereGeometry args={[0.11, 14, 14]} />
+                <meshStandardMaterial
+                    color={color}
+                    emissive={color}
+                    emissiveIntensity={0.9}
+                    transparent
+                    opacity={0.3}
+                    depthWrite={false}
+                />
+            </mesh>
             {/* Glowing photon */}
             <mesh ref={photonRef} position={startPoint} visible={false}>
                 <sphereGeometry args={[0.12, 12, 12]} />
@@ -528,7 +608,7 @@ function AxisLabel({ position, text }) {
     );
 }
 
-function SingleBlochSphere({ branches, position = [0, 0, 0], qubitIndex, isPlayMode }) {
+function SingleBlochSphere({ branches, position = [0, 0, 0], qubitIndex, isPlayMode, staticSnapshotToken = 0, initialStateMode = 'zero' }) {
     const [prevBranchCount, setPrevBranchCount] = useState(branches.length);
     const [newBranchIndices, setNewBranchIndices] = useState([]);
 
@@ -609,6 +689,8 @@ function SingleBlochSphere({ branches, position = [0, 0, 0], qubitIndex, isPlayM
                     isPlayMode={isPlayMode}
                     isNewBranch={newBranchIndices.includes(i)}
                     depthOffset={branch.depthOffset || 0}
+                    staticSnapshotToken={staticSnapshotToken}
+                    initialStateMode={initialStateMode}
                 />
             ))}
         </group>
@@ -729,7 +811,7 @@ function AxisOverlayWidget({ cameraQuaternionRef }) {
     );
 }
 
-function Scene({ sphereData, focusPosition, isPlayMode, onUserInteract, controlSignals = [], cameraQuaternionRef }) {
+function Scene({ sphereData, focusPosition, isPlayMode, onUserInteract, controlSignals = [], cameraQuaternionRef, staticSnapshotToken = 0, initialStateMode = 'zero' }) {
     const controlsRef = useRef();
     const [activeSignals, setActiveSignals] = useState([]);
     const signalIdRef = useRef(0);
@@ -743,7 +825,7 @@ function Scene({ sphereData, focusPosition, isPlayMode, onUserInteract, controlS
             }));
             setActiveSignals(prev => [...prev, ...newSignals]);
         }
-    }, [controlSignals.map(s => `${s.from}-${s.to}-${s.hasKickback ? 1 : 0}`).join(',')]);
+    }, [controlSignals]);
 
     const handleSignalComplete = useCallback((id) => {
         setActiveSignals(prev => prev.filter(s => s.id !== id));
@@ -763,6 +845,8 @@ function Scene({ sphereData, focusPosition, isPlayMode, onUserInteract, controlS
                     position={data.position}
                     qubitIndex={data.originalIndex}
                     isPlayMode={isPlayMode}
+                    staticSnapshotToken={staticSnapshotToken}
+                    initialStateMode={initialStateMode}
                 />
             ))}
             {/* Control signals */}
@@ -777,7 +861,7 @@ function Scene({ sphereData, focusPosition, isPlayMode, onUserInteract, controlS
                             key={`signal-${signal.id}`}
                             fromPosition={fromSphere.position}
                             toPosition={toSphere.position}
-                            onComplete={() => handleSignalComplete(signal.id)}
+                            onComplete={signal.hasKickback ? undefined : () => handleSignalComplete(signal.id)}
                             variant="control"
                         />
                         {/* Kickback signal: from target back to control (if applicable) */}
@@ -787,7 +871,8 @@ function Scene({ sphereData, focusPosition, isPlayMode, onUserInteract, controlS
                                 fromPosition={toSphere.position}
                                 toPosition={fromSphere.position}
                                 variant="kickback"
-                                delay={0.05}
+                                delay={0.08}
+                                onComplete={() => handleSignalComplete(signal.id)}
                             />
                         )}
                     </group>
@@ -807,7 +892,7 @@ function Scene({ sphereData, focusPosition, isPlayMode, onUserInteract, controlS
         </>
     );
 }
-export default function BlochSphereView({ qubitBranches, visibility, focusQubit, isPlaying, controlSignals = [] }) {
+export default function BlochSphereView({ qubitBranches, visibility, focusQubit, isPlaying, controlSignals = [], staticSnapshotToken = 0, initialStateMode = 'zero' }) {
     const numVisible = visibility.filter(v => v).length;
     const spacing = 3.5;
     const [userInteracted, setUserInteracted] = useState(false);
@@ -856,6 +941,8 @@ export default function BlochSphereView({ qubitBranches, visibility, focusQubit,
                     onUserInteract={handleUserInteract}
                     controlSignals={controlSignals}
                     cameraQuaternionRef={cameraQuaternionRef}
+                    staticSnapshotToken={staticSnapshotToken}
+                    initialStateMode={initialStateMode}
                 />
             </Canvas>
             <div style={AXIS_WIDGET_STYLE}>

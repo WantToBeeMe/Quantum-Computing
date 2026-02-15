@@ -104,20 +104,6 @@
     overflow-y: hidden;
 }
 
-.circuit-slots-wrapper::-webkit-scrollbar {
-    height: 5px;
-}
-
-.circuit-slots-wrapper::-webkit-scrollbar-track {
-    background: #21262d;
-    border-radius: 3px;
-}
-
-.circuit-slots-wrapper::-webkit-scrollbar-thumb {
-    background: #484f58;
-    border-radius: 3px;
-}
-
 .circuit-slots {
     position: relative;
     min-width: calc(var(--slot-count) * 38px);

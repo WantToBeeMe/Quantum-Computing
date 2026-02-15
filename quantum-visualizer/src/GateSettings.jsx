@@ -143,7 +143,7 @@ export default function GateSettings({ gate, gateIndex, qubitIndex, onRemove, on
             // Trigger control signal animation
             if (onControlSignal) {
                 const hasKickback = gateHasPhaseKickbackPotential(gate);
-                onControlSignal(ctrl, qubitIndex, hasKickback);
+                onControlSignal(ctrl, qubitIndex, hasKickback, gateIndex, gate);
             }
         }
     };

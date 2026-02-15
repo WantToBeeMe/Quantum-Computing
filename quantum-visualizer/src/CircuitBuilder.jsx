@@ -19,7 +19,9 @@ export default function CircuitBuilder({
     onToggleVisibility,
     onFocusQubit,
     onAddBarrier,
-    onRemoveBarrier
+    onRemoveBarrier,
+    initialStateMode = 'zero',
+    onCycleInitialState
 }) {
     const [isDraggingGate, setIsDraggingGate] = useState(false);
     const [isDraggingBarrier, setIsDraggingBarrier] = useState(false);
@@ -42,6 +44,11 @@ export default function CircuitBuilder({
     }, [circuits]);
 
     const slots = Array.from({ length: maxSlot + 2 }, (_, i) => i);
+    const initialStateLabel = initialStateMode === 'one'
+        ? 'Init: |1⟩'
+        : initialStateMode === 'plus'
+            ? 'Init: |+⟩'
+            : 'Init: |0⟩';
 
     // Sorted barriers for frame logic
     const sortedBarriers = useMemo(() => [...barriers].sort((a, b) => a - b), [barriers]);
@@ -265,6 +272,13 @@ export default function CircuitBuilder({
         <div className="circuit-builder">
             <div className="circuit-header">
                 <h3 className="circuit-title">Circuit</h3>
+                <button
+                    className="mode-toggle"
+                    onClick={() => onCycleInitialState && onCycleInitialState()}
+                    title="Cycle initial qubit state for all threads"
+                >
+                    {initialStateLabel}
+                </button>
             </div>
 
             <div className="circuit-board">
@@ -295,7 +309,7 @@ export default function CircuitBuilder({
                     </div>
 
                     {/* Circuit area */}
-                    <div className="circuit-slots-wrapper">
+                    <div className="circuit-slots-wrapper styled-scrollbar">
                         <div
                             ref={circuitRef}
                             className="circuit-slots"

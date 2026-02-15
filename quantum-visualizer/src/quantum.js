@@ -2,6 +2,7 @@
 
 // Complex number operations
 export const complex = (re, im = 0) => ({ re, im });
+const SQRT2_INV = 1 / Math.sqrt(2);
 
 export const cAdd = (a, b) => complex(a.re + b.re, a.im + b.im);
 export const cSub = (a, b) => complex(a.re - b.re, a.im - b.im);
@@ -25,9 +26,15 @@ export const normalize = (state) => {
 // Initial states
 export const STATE_ZERO = () => [complex(1), complex(0)];
 export const STATE_ONE = () => [complex(0), complex(1)];
+export const STATE_PLUS = () => [complex(SQRT2_INV), complex(SQRT2_INV)];
+
+export const getInitialQubitState = (mode = 'zero') => {
+    if (mode === 'one') return STATE_ONE();
+    if (mode === 'plus') return STATE_PLUS();
+    return STATE_ZERO();
+};
 
 // Gate matrices
-const SQRT2_INV = 1 / Math.sqrt(2);
 
 // Create U3 gate matrix from angles (theta, phi, lambda)
 export const createU3Matrix = (theta, phi, lambda) => [

@@ -7,7 +7,7 @@ import AnimationPlayer from './AnimationPlayer';
 import ProbabilityBars from './ProbabilityBars';
 import StateDisplay from './StateDisplay';
 import {
-  STATE_ZERO,
+  getInitialQubitState,
   applyGate,
   createU3Matrix,
   getMultiQubitProbabilities,
@@ -31,6 +31,8 @@ function App() {
   const [configHeightPercent, setConfigHeightPercent] = useState(80);
   const [isDraggingH, setIsDraggingH] = useState(false);
   const [isDraggingV, setIsDraggingV] = useState(false);
+  const [visibilityChangeToken, setVisibilityChangeToken] = useState(0);
+  const [initialStateMode, setInitialStateMode] = useState('zero');
   const containerRef = useRef(null);
   const leftPanelRef = useRef(null);
 
@@ -64,6 +66,8 @@ function App() {
     return entries.filter(e => e.slot < barrierSlot).map(e => e.gate);
   }, [circuits, barriers, barrierCount]);
 
+  const getInitialState = useCallback(() => getInitialQubitState(initialStateMode), [initialStateMode]);
+
   // ── Column state cache for phase kickback detection ──
   // Builds stateAtColumn[qi][slot] = state of qubit qi up to (not including) slot
   const buildColumnStateCache = useCallback((frame) => {
@@ -79,7 +83,7 @@ function App() {
       const gateList = getOrderedGates(qi, frame);
       // Build column->state mapping
       const statesAtSlot = {};
-      let state = STATE_ZERO();
+      let state = getInitialState();
       statesAtSlot[-1] = state; // before any gate
 
       // Process gates sorted by slot
@@ -96,7 +100,7 @@ function App() {
       cache.push(statesAtSlot);
     }
     return cache;
-  }, [circuits, getOrderedGates]);
+  }, [circuits, getOrderedGates, getInitialState]);
 
   // Calculate branches with rotation history
   const qubitBranches = useMemo(() => {
@@ -108,8 +112,8 @@ function App() {
     // Helper to get control qubit state at a specific slot from cache
     const getControlStateAtSlot = (ctrlQubit, slot) => {
       const qubitCache = stateCache[ctrlQubit];
-      if (!qubitCache) return STATE_ZERO();
-      return qubitCache[slot] || STATE_ZERO();
+      if (!qubitCache) return getInitialState();
+      return qubitCache[slot] || getInitialState();
     };
 
     // For each control qubit, derive synthetic phase gates caused by outgoing controlled gates.
@@ -122,7 +126,7 @@ function App() {
           if (!gate || gate.gate === 'CONTROL') return;
           if (gate.controlIndex !== controlQubit) return;
 
-          const targetStateBefore = stateCache[targetQubit]?.[gate.slot] || STATE_ZERO();
+          const targetStateBefore = stateCache[targetQubit]?.[gate.slot] || getInitialState();
           const phase = getKickbackPhaseForControlledGate(gate, targetStateBefore);
           if (phase === null || Math.abs(phase) <= 0.01) return;
 
@@ -176,7 +180,7 @@ function App() {
       };
 
       if (!hasControl) {
-        let state = STATE_ZERO();
+        let state = getInitialState();
         state = applyGates(gates, state);
         const rotations = buildRotations(gates);
         return [{ state, coords: stateToBlochCoords(state), probability: 1, rotations }];
@@ -215,7 +219,7 @@ function App() {
             return controlActive[g.controlIndex];
           });
 
-          let state = STATE_ZERO();
+          let state = getInitialState();
           state = applyGates(activeGates, state);
           const rotations = buildRotations(activeGates);
 
@@ -281,14 +285,14 @@ function App() {
         if (mergedBranches.length > 10) mergedBranches.length = 10;
 
         return mergedBranches.length > 0 ? mergedBranches : [{
-          state: STATE_ZERO(),
-          coords: stateToBlochCoords(STATE_ZERO()),
+          state: getInitialState(),
+          coords: stateToBlochCoords(getInitialState()),
           probability: 1,
           rotations: []
         }];
       }
     });
-  }, [circuits, animationFrame, totalFrames, getOrderedGates, buildColumnStateCache]);
+  }, [circuits, animationFrame, totalFrames, getOrderedGates, buildColumnStateCache, getInitialState]);
 
   const qubitStates = useMemo(() => qubitBranches.map(b => b.reduce((a, c) => c.probability > a.probability ? c : a).state), [qubitBranches]);
   const probabilities = useMemo(() => getMultiQubitProbabilities(qubitStates, false), [qubitStates]);
@@ -296,10 +300,10 @@ function App() {
 
   // ── Phase kickback detection using column state cache ──
   const detectPhaseKickback = useCallback((targetGate, targetQubit, slot, stateCache) => {
-    const targetStateBefore = stateCache[targetQubit]?.[slot] || STATE_ZERO();
+    const targetStateBefore = stateCache[targetQubit]?.[slot] || getInitialState();
     const phase = getKickbackPhaseForControlledGate(targetGate, targetStateBefore);
     return phase !== null && Math.abs(phase) > 0.01;
-  }, []);
+  }, [getInitialState]);
 
   // Compute active control signals for current animation frame
   const activeControlSignals = useMemo(() => {
@@ -335,10 +339,20 @@ function App() {
   }, [circuits, barriers, animationFrame, isPlaying, detectPhaseKickback, buildColumnStateCache]);
 
   // Handler for control signals triggered from GateSettings
-  const handleControlSignal = useCallback((fromQubit, toQubit, hasKickback = false) => {
+  const handleControlSignal = useCallback((fromQubit, toQubit, hasKickbackHint = false, slot = null, targetGate = null) => {
+    let hasKickback = hasKickbackHint;
+
+    if (targetGate && slot !== null) {
+      const frame = animationFrame < 0 ? totalFrames - 1 : animationFrame;
+      const stateCache = buildColumnStateCache(frame);
+      const targetStateBefore = stateCache[toQubit]?.[slot] || getInitialState();
+      const phase = getKickbackPhaseForControlledGate(targetGate, targetStateBefore);
+      hasKickback = phase !== null && Math.abs(phase) > 0.01;
+    }
+
     setConfigControlSignals([{ from: fromQubit, to: toQubit, hasKickback }]);
     setTimeout(() => setConfigControlSignals([]), 50);
-  }, []);
+  }, [animationFrame, totalFrames, buildColumnStateCache, getInitialState]);
 
   // Combine animation signals and config signals
   const allControlSignals = useMemo(() => {
@@ -696,6 +710,18 @@ function App() {
 
   const handleToggleVisibility = useCallback((qi) => {
     setQubitVisibility(prev => { const n = [...prev]; n[qi] = !n[qi]; return n; });
+    setVisibilityChangeToken(t => t + 1);
+  }, []);
+
+  const handleCycleInitialState = useCallback(() => {
+    setInitialStateMode(prev => {
+      if (prev === 'zero') return 'one';
+      if (prev === 'one') return 'plus';
+      return 'zero';
+    });
+    setVisibilityChangeToken(t => t + 1);
+    setAnimationFrame(-1);
+    setIsPlaying(false);
   }, []);
 
   const handleFocusQubit = useCallback((qi) => {
@@ -737,7 +763,7 @@ function App() {
 
       <main className="app-main" ref={containerRef}>
         <div className="left-panel" ref={leftPanelRef} style={{ width: leftPanelWidth }}>
-          <div className="config-section" style={{ height: `${configHeightPercent}%` }}>
+          <div className="config-section styled-scrollbar" style={{ height: `${configHeightPercent}%` }}>
             <GatePalette />
             <CircuitBuilder
               circuits={circuits}
@@ -758,6 +784,8 @@ function App() {
               onFocusQubit={handleFocusQubit}
               onAddBarrier={handleAddBarrier}
               onRemoveBarrier={handleRemoveBarrier}
+              initialStateMode={initialStateMode}
+              onCycleInitialState={handleCycleInitialState}
             />
             <GateSettings
               gate={selectedGateData}
@@ -772,7 +800,7 @@ function App() {
 
           <div className={`resize-handle-h ${isDraggingV ? 'active' : ''}`} onMouseDown={() => setIsDraggingV(true)} />
 
-          <div className="prob-section" style={{ height: `${100 - configHeightPercent}%` }}>
+          <div className="prob-section styled-scrollbar" style={{ height: `${100 - configHeightPercent}%` }}>
             <AnimationPlayer
               barrierCount={barrierCount}
               currentFrame={animationFrame < 0 ? totalFrames - 1 : animationFrame}
@@ -796,6 +824,8 @@ function App() {
             focusQubit={focusQubit}
             isPlaying={isPlaying}
             controlSignals={allControlSignals}
+            staticSnapshotToken={visibilityChangeToken}
+            initialStateMode={initialStateMode}
           />
         </div>
       </main>

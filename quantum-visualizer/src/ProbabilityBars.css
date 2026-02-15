@@ -21,26 +21,6 @@
     letter-spacing: 1px;
 }
 
-.mode-toggle {
-    background: #21262d;
-    border: 1px solid #30363d;
-    color: #c9d1d9;
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 10px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.mode-toggle:hover {
-    background: #30363d;
-    border-color: #58a6ff;
-    color: #58a6ff;
-}
-
 .prob-container {
     display: flex;
     flex-direction: column;
@@ -48,20 +28,6 @@
     max-height: 140px;
     overflow-y: auto;
     padding-right: 4px;
-}
-
-.prob-container::-webkit-scrollbar {
-    width: 5px;
-}
-
-.prob-container::-webkit-scrollbar-track {
-    background: #21262d;
-    border-radius: 3px;
-}
-
-.prob-container::-webkit-scrollbar-thumb {
-    background: #484f58;
-    border-radius: 3px;
 }
 
 .prob-row {

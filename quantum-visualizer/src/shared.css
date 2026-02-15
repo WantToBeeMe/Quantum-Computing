@@ -1,4 +1,11 @@
 /* Shared panel styling */
+:root {
+    --ui-scrollbar-size: 5px;
+    --ui-scrollbar-track: #0d1117;
+    --ui-scrollbar-thumb: #30363d;
+    --ui-scrollbar-thumb-hover: #484f58;
+}
+
 .panel-box {
     background: #161b22;
     border-radius: 10px;
@@ -13,4 +20,50 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 1px;
+}
+
+/* Reusable scrollbar style for all scrollable panels/containers */
+.styled-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--ui-scrollbar-thumb) var(--ui-scrollbar-track);
+}
+
+.styled-scrollbar::-webkit-scrollbar {
+    width: var(--ui-scrollbar-size);
+    height: var(--ui-scrollbar-size);
+}
+
+.styled-scrollbar::-webkit-scrollbar-track {
+    background: var(--ui-scrollbar-track);
+    border-radius: 3px;
+}
+
+.styled-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--ui-scrollbar-thumb);
+    border-radius: 3px;
+}
+
+.styled-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--ui-scrollbar-thumb-hover);
+}
+
+/* Shared small segmented mode/option toggle button */
+.mode-toggle {
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mode-toggle:hover {
+    background: #30363d;
+    border-color: #58a6ff;
+    color: #58a6ff;
 }
