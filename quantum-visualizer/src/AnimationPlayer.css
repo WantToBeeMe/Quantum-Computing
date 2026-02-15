@@ -1,8 +1,8 @@
 .animation-player {
-    background: #161b22;
+    background: var(--qbits-bg-elev);
     border-radius: 8px;
     padding: 8px 10px;
-    border: 1px solid #30363d;
+    border: none;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -15,8 +15,8 @@
 
 .player-btn {
     background: transparent;
-    border: 1px solid #30363d;
-    color: #8b949e;
+    border: none;
+    color: var(--qbits-text-dim);
     border-radius: 4px;
     cursor: pointer;
     display: flex;
@@ -33,19 +33,18 @@
 .player-btn.play {
     width: 30px;
     height: 28px;
-    background: #238636;
-    border-color: #238636;
-    color: white;
+    background: var(--qbits-accent);
+    color: var(--black);
 }
 
 .player-btn:hover:not(:disabled) {
-    background: #30363d;
-    color: #c9d1d9;
+    background: var(--qbits-bg-elev-2);
+    color: var(--qbits-text);
 }
 
 .player-btn.play:hover {
-    background: #2ea043;
-    border-color: #2ea043;
+    background: var(--qbits-accent-soft);
+    color: var(--black);
 }
 
 .player-btn:disabled {
@@ -53,11 +52,10 @@
     cursor: not-allowed;
 }
 
-/* Segmented timeline */
 .player-progress {
     flex: 1;
     height: 6px;
-    background: #21262d;
+    background: var(--qbits-bg-elev-2);
     border-radius: 3px;
     display: flex;
     gap: 2px;
@@ -66,7 +64,7 @@
 
 .segment {
     height: 100%;
-    background: #30363d;
+    background: var(--neutral-700);
     border-radius: 3px;
     position: relative;
     overflow: hidden;
@@ -74,11 +72,11 @@
 }
 
 .segment.completed {
-    background: linear-gradient(90deg, #58a6ff, #a371f7);
+    background: var(--qbits-accent);
 }
 
 .segment.animating {
-    background: #238636;
+    background: var(--qbits-accent);
 }
 
 .segment.animating::after {
@@ -88,7 +86,7 @@
     left: 0;
     height: 100%;
     width: 0%;
-    background: #3fb950;
+    background: var(--qbits-accent);
     animation: fillSegment 1s linear forwards;
 }
 
@@ -102,22 +100,10 @@
     }
 }
 
-@keyframes pulse {
-
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0.6;
-    }
-}
-
 .frame-label {
     font-size: 10px;
-    color: #8b949e;
-    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--qbits-text-dim);
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
     min-width: 28px;
     text-align: right;
 }

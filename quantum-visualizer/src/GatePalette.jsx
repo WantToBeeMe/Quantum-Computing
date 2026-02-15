@@ -55,10 +55,10 @@ export default function GatePalette() {
                         title="Barrier - pauses animation\n(Drag between gates)"
                     >
                         <svg viewBox="0 0 24 40" width="16" height="28">
-                            <line x1="12" y1="2" x2="12" y2="8" stroke="#8b949e" strokeWidth="3" strokeLinecap="round" />
-                            <line x1="12" y1="14" x2="12" y2="20" stroke="#8b949e" strokeWidth="3" strokeLinecap="round" />
-                            <line x1="12" y1="26" x2="12" y2="32" stroke="#8b949e" strokeWidth="3" strokeLinecap="round" />
-                            <line x1="12" y1="38" x2="12" y2="40" stroke="#8b949e" strokeWidth="3" strokeLinecap="round" />
+                            <line x1="12" y1="2" x2="12" y2="8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                            <line x1="12" y1="14" x2="12" y2="20" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                            <line x1="12" y1="26" x2="12" y2="32" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                            <line x1="12" y1="38" x2="12" y2="40" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
                         </svg>
                     </div>
                 </div>

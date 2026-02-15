@@ -89,7 +89,7 @@ export default function GateSettings({ gate, gateIndex, qubitIndex, onRemove, on
         return (
             <div className="gate-settings">
                 <div className="settings-header">
-                    <div className="gate-badge control-node" style={{ background: '#ff9900', borderRadius: '50%', width: '20px', height: '20px' }}></div>
+                    <div className="gate-badge control-node"></div>
                     <span className="gate-name">Control Node</span>
                 </div>
                 <div className="settings-description">

@@ -1,8 +1,8 @@
 .circuit-builder {
-    background: #161b22;
+    background: var(--qbits-bg-elev);
     border-radius: 10px;
     padding: 12px;
-    border: 1px solid #30363d;
+    border: none;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -16,7 +16,7 @@
 
 .circuit-title {
     margin: 0;
-    color: #c9d1d9;
+    color: var(--qbits-text);
     font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
@@ -50,8 +50,8 @@
 .qubit-label {
     background: none;
     border: none;
-    color: #58a6ff;
-    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--qbits-gate-green);
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
     font-size: 11px;
     padding: 4px 5px;
     border-radius: 4px;
@@ -60,7 +60,7 @@
 }
 
 .qubit-label:hover {
-    background: rgba(88, 166, 255, 0.1);
+    background: var(--qbits-bg-elev-2);
 }
 
 .qubit-btn {
@@ -73,7 +73,7 @@
     border-radius: 4px;
     transition: all 0.15s ease;
     opacity: 0.5;
-    color: #8b949e;
+    color: var(--qbits-text-dim);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -81,7 +81,9 @@
 
 .qubit-btn:hover:not(:disabled) {
     opacity: 1;
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--qbits-bg-elev-2);
+    border-color: var(--qbits-gate-green);
+    color: var(--qbits-gate-green);
 }
 
 .qubit-btn:disabled {
@@ -94,8 +96,9 @@
 }
 
 .qubit-btn.trash:hover:not(:disabled) {
-    color: #f85149;
-    background: rgba(248, 81, 73, 0.2);
+    color: var(--danger-100);
+    background: var(--danger-800);
+    border-color: var(--danger-600);
 }
 
 .circuit-slots-wrapper {
@@ -117,11 +120,10 @@
     right: 0;
     top: calc(var(--row) * 42px + 18px);
     height: 2px;
-    background: linear-gradient(90deg, #30363d, #58a6ff 20%, #58a6ff 80%, #30363d);
+    background: var(--qbits-track);
     pointer-events: none;
 }
 
-/* Control lines SVG */
 .control-lines-svg {
     position: absolute;
     left: 0;
@@ -130,50 +132,48 @@
     z-index: 1;
 }
 
-/* Gates */
+.control-line {
+    background: var(--qbits-control);
+}
+
 .circuit-gate {
     position: absolute;
     width: 32px;
     height: 32px;
     left: calc(var(--slot) * 38px + 3px);
     top: calc(var(--row) * 42px + 3px);
-    background: #0d1117;
+    background: var(--qbits-bg);
     border: 2px solid var(--gate-color);
     color: var(--gate-color);
-    border-radius: 5px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: bold;
     font-size: 11px;
-    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
     cursor: grab;
     transition: all 0.1s ease;
     z-index: 10;
 }
 
 .circuit-gate:hover {
-    box-shadow: 0 0 12px var(--gate-color);
+    background: var(--qbits-bg-elev-2);
     z-index: 20;
 }
 
-/* Selected gate: filled background with color glow */
 .circuit-gate.selected {
     background: var(--gate-color);
-    color: #0d1117;
-    box-shadow: 0 0 8px var(--gate-color), 0 0 12px var(--gate-color);
+    color: var(--black);
     z-index: 25;
 }
 
-/* Fix glow cutoff */
 .circuit-cell {
     overflow: visible;
 }
 
-/* Active green lines during animation */
 .qubit-track.animating {
-    background: linear-gradient(90deg, #30363d, #3fb950 20%, #3fb950 80%, #30363d);
-    box-shadow: 0 0 6px rgba(63, 185, 80, 0.4);
+    background: var(--qbits-accent);
 }
 
 .circuit-gate.dragging {
@@ -181,21 +181,20 @@
     cursor: grabbing;
 }
 
-/* Disabled gates during animation */
 .circuit-gate.disabled {
-    background: #30363d !important;
-    border-color: #484f58 !important;
-    color: #6e7681 !important;
+    background: var(--neutral-900) !important;
+    border-color: var(--neutral-700) !important;
+    color: var(--neutral-500) !important;
     pointer-events: none;
-    opacity: 0.5;
+    opacity: 0.45;
 }
 
 .control-indicator {
     position: absolute;
     top: -8px;
     right: -8px;
-    background: #ff9900;
-    color: white;
+    background: var(--qbits-control);
+    color: var(--black);
     font-size: 10px;
     width: 16px;
     height: 16px;
@@ -204,86 +203,66 @@
     align-items: center;
     justify-content: center;
     font-weight: bold;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-/* Control node (dot) - takes full gate slot, shows centered circle */
 .circuit-gate.control-node {
     background: transparent !important;
     border: none !important;
-    box-shadow: none !important;
     color: transparent !important;
     cursor: grab;
     pointer-events: auto;
 }
 
-/* Override ALL inherited glow states on the outer square */
 .circuit-gate.control-node:hover,
 .circuit-gate.control-node.selected,
 .circuit-gate.control-node.paired-selected {
     background: transparent !important;
-    box-shadow: none !important;
 }
 
-/* Hide text content inside control node */
 .circuit-gate.control-node .control-indicator {
     display: none;
 }
 
-/* The inner circle drawn via ::after */
 .circuit-gate.control-node::after {
     content: '';
     position: absolute;
     width: 14px;
     height: 14px;
     border-radius: 50%;
-    background: #0d1117;
-    border: 2.5px solid #ff9900;
+    background: var(--qbits-bg);
+    border: 2.5px solid var(--qbits-control);
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
 }
 
-.circuit-gate.control-node:hover::after {
-    box-shadow: 0 0 10px rgba(255, 153, 0, 0.5);
-}
-
 .circuit-gate.control-node.selected::after,
 .circuit-gate.control-node.paired-selected::after {
-    background: #ff9900;
-    box-shadow: 0 0 8px #ff9900, 0 0 14px #ff9900;
+    background: var(--qbits-control);
 }
 
-/* Paired glow for target gate when its control is selected */
-.circuit-gate.paired-selected:not(.control-node) {
-    box-shadow: 0 0 8px var(--gate-color), 0 0 12px var(--gate-color);
-}
-
-/* Drop highlight for empty slot */
 .drop-highlight {
     position: absolute;
     width: 34px;
     height: 34px;
     left: calc(var(--slot) * 38px + 2px);
     top: calc(var(--row) * 42px + 2px);
-    border: 2px dashed #58a6ff;
-    background: rgba(88, 166, 255, 0.1);
-    border-radius: 5px;
+    border: none;
+    background: var(--qbits-bg-elev-2);
+    border-radius: 8px;
     pointer-events: none;
     z-index: 5;
 }
 
-/* Insert indicator - green bar on side of occupied slot */
 .insert-indicator {
     position: absolute;
     width: 4px;
     height: 34px;
     top: calc(var(--row) * 42px + 2px);
-    background: #3fb950;
+    background: var(--qbits-accent);
     border-radius: 2px;
     pointer-events: none;
     z-index: 20;
-    box-shadow: 0 0 8px rgba(63, 185, 80, 0.5);
 }
 
 .insert-indicator.left {
@@ -294,7 +273,6 @@
     left: calc(var(--slot) * 38px + 36px);
 }
 
-/* Barrier line */
 .barrier-line {
     position: absolute;
     width: 4px;
@@ -302,8 +280,8 @@
     top: 0;
     height: var(--total-height);
     background: repeating-linear-gradient(to bottom,
-            #6e7681 0px,
-            #6e7681 4px,
+            var(--neutral-300) 0px,
+            var(--neutral-300) 4px,
             transparent 4px,
             transparent 8px);
     border-radius: 2px;
@@ -314,52 +292,44 @@
 
 .barrier-line:hover {
     background: repeating-linear-gradient(to bottom,
-            #c9d1d9 0px,
-            #c9d1d9 4px,
+            var(--neutral-200) 0px,
+            var(--neutral-200) 4px,
             transparent 4px,
             transparent 8px);
 }
 
 .barrier-line.selected {
     background: repeating-linear-gradient(to bottom,
-            #c9d1d9 0px,
-            #c9d1d9 4px,
+            var(--neutral-100) 0px,
+            var(--neutral-100) 4px,
             transparent 4px,
             transparent 8px);
-    box-shadow: 0 0 8px rgba(201, 209, 217, 0.4);
 }
 
 .barrier-line.highlighted {
     background: repeating-linear-gradient(to bottom,
-            #3fb950 0px,
-            #3fb950 4px,
+            var(--qbits-accent) 0px,
+            var(--qbits-accent) 4px,
             transparent 4px,
             transparent 8px);
-    box-shadow: 0 0 8px rgba(63, 185, 80, 0.5);
 }
 
-/* Barrier indicator while dragging */
 .barrier-indicator {
     position: absolute;
     width: 6px;
     left: calc(var(--slot) * 38px - 3px);
     top: 0;
     height: var(--total-height);
-    background: repeating-linear-gradient(to bottom,
-            #8b949e 0px,
-            #8b949e 4px,
-            transparent 4px,
-            transparent 8px);
+    background: var(--neutral-400);
     border-radius: 3px;
     pointer-events: none;
     z-index: 20;
-    box-shadow: 0 0 10px rgba(139, 148, 158, 0.5);
 }
 
 .add-qubit-button {
-    background: #21262d;
-    border: 1px dashed #30363d;
-    color: #8b949e;
+    background: var(--qbits-bg-elev-3);
+    border: none;
+    color: var(--neutral-100);
     padding: 7px 12px;
     border-radius: 5px;
     font-size: 11px;
@@ -369,7 +339,6 @@
 }
 
 .add-qubit-button:hover {
-    background: #30363d;
-    border-color: #58a6ff;
-    color: #58a6ff;
+    background: var(--neutral-600);
+    color: var(--neutral-50);
 }

@@ -1,11 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import BlochSphereView from './BlochSphere';
-import GatePalette from './GatePalette';
-import CircuitBuilder from './CircuitBuilder';
-import GateSettings from './GateSettings';
-import AnimationPlayer from './AnimationPlayer';
-import ProbabilityBars from './ProbabilityBars';
-import StateDisplay from './StateDisplay';
+import QbitsLanding from './pages/QbitsLanding';
+import QbitsWorkspace from './layout/QbitsWorkspace';
 import {
   getInitialQubitState,
   applyGate,
@@ -18,6 +13,7 @@ import {
 import './App.css';
 
 function App() {
+  const [showLanding, setShowLanding] = useState(true);
   const [circuits, setCircuits] = useState([[]]); // Each gate: { gate, matrix, decomposition, controlIndex }
   const [barriers, setBarriers] = useState([]);
   const [qubitVisibility, setQubitVisibility] = useState([true]);
@@ -754,82 +750,58 @@ function App() {
     { isBarrier: true, slot: selectedGate.slot } :
     selectedGate ? circuits[selectedGate.qubitIndex]?.[selectedGate.slotIndex] : null;
 
+  if (showLanding) {
+    return <QbitsLanding onStart={() => setShowLanding(false)} />;
+  }
+
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>Quantum Visualizer</h1>
-        <span className="subtitle">Interactive Multi-Qubit Circuit Simulator</span>
-      </header>
-
-      <main className="app-main" ref={containerRef}>
-        <div className="left-panel" ref={leftPanelRef} style={{ width: leftPanelWidth }}>
-          <div className="config-section styled-scrollbar" style={{ height: `${configHeightPercent}%` }}>
-            <GatePalette />
-            <CircuitBuilder
-              circuits={circuits}
-              barriers={barriers}
-              qubitVisibility={qubitVisibility}
-              selectedGate={selectedGate}
-              highlightedBarrier={highlightedBarrier}
-              isPlaying={isPlaying}
-              animationFrame={animationFrame < 0 ? -1 : animationFrame}
-              onInsertGate={handleInsertGate}
-              onRemoveGate={handleRemoveGate}
-              onMoveGate={handleMoveGate}
-              onGateClick={handleGateClick}
-              onGateMiddleClick={handleGateMiddleClick}
-              onAddQubit={handleAddQubit}
-              onRemoveQubit={handleRemoveQubit}
-              onToggleVisibility={handleToggleVisibility}
-              onFocusQubit={handleFocusQubit}
-              onAddBarrier={handleAddBarrier}
-              onRemoveBarrier={handleRemoveBarrier}
-              initialStateMode={initialStateMode}
-              onCycleInitialState={handleCycleInitialState}
-            />
-            <GateSettings
-              gate={selectedGateData}
-              gateIndex={selectedGate?.slotIndex}
-              qubitIndex={selectedGate?.qubitIndex}
-              numQubits={circuits.length}
-              onRemove={selectedGate?.isBarrier ? () => handleRemoveBarrier(selectedGate.slot) : handleRemoveGate}
-              onUpdate={handleUpdateGate}
-              onControlSignal={handleControlSignal}
-            />
-          </div>
-
-          <div className={`resize-handle-h ${isDraggingV ? 'active' : ''}`} onMouseDown={() => setIsDraggingV(true)} />
-
-          <div className="prob-section styled-scrollbar" style={{ height: `${100 - configHeightPercent}%` }}>
-            <AnimationPlayer
-              barrierCount={barrierCount}
-              currentFrame={animationFrame < 0 ? totalFrames - 1 : animationFrame}
-              isPlaying={isPlaying}
-              segmentDurations={segmentDurations}
-              onFrameChange={setAnimationFrame}
-              onPlayPause={(playing) => { if (playing) setSelectedGate(null); setIsPlaying(playing); }}
-              onReset={() => { setAnimationFrame(-1); setIsPlaying(false); }}
-            />
-            <ProbabilityBars probabilities={probabilities} allProbabilities={allProbabilities} />
-            <StateDisplay qubitStates={qubitBranches} />
-          </div>
-        </div>
-
-        <div className={`resize-handle ${isDraggingH ? 'active' : ''}`} onMouseDown={() => setIsDraggingH(true)} />
-
-        <div className="right-panel">
-          <BlochSphereView
-            qubitBranches={qubitBranches}
-            visibility={qubitVisibility}
-            focusQubit={focusQubit}
-            isPlaying={isPlaying}
-            controlSignals={allControlSignals}
-            staticSnapshotToken={visibilityChangeToken}
-            initialStateMode={initialStateMode}
-          />
-        </div>
-      </main>
-    </div>
+    <QbitsWorkspace
+      containerRef={containerRef}
+      leftPanelRef={leftPanelRef}
+      leftPanelWidth={leftPanelWidth}
+      configHeightPercent={configHeightPercent}
+      isDraggingH={isDraggingH}
+      isDraggingV={isDraggingV}
+      onStartDragH={() => setIsDraggingH(true)}
+      onStartDragV={() => setIsDraggingV(true)}
+      circuits={circuits}
+      barriers={barriers}
+      qubitVisibility={qubitVisibility}
+      selectedGate={selectedGate}
+      highlightedBarrier={highlightedBarrier}
+      isPlaying={isPlaying}
+      animationFrame={animationFrame}
+      initialStateMode={initialStateMode}
+      barrierCount={barrierCount}
+      totalFrames={totalFrames}
+      segmentDurations={segmentDurations}
+      probabilities={probabilities}
+      allProbabilities={allProbabilities}
+      qubitBranches={qubitBranches}
+      focusQubit={focusQubit}
+      allControlSignals={allControlSignals}
+      visibilityChangeToken={visibilityChangeToken}
+      selectedGateData={selectedGateData}
+      onInsertGate={handleInsertGate}
+      onRemoveGate={handleRemoveGate}
+      onMoveGate={handleMoveGate}
+      onGateClick={handleGateClick}
+      onGateMiddleClick={handleGateMiddleClick}
+      onAddQubit={handleAddQubit}
+      onRemoveQubit={handleRemoveQubit}
+      onToggleVisibility={handleToggleVisibility}
+      onFocusQubit={handleFocusQubit}
+      onAddBarrier={handleAddBarrier}
+      onRemoveBarrier={handleRemoveBarrier}
+      onCycleInitialState={handleCycleInitialState}
+      onUpdateGate={handleUpdateGate}
+      onControlSignal={handleControlSignal}
+      onFrameChange={setAnimationFrame}
+      onPlayPause={(playing) => {
+        if (playing) setSelectedGate(null);
+        setIsPlaying(playing);
+      }}
+    />
   );
 }
 

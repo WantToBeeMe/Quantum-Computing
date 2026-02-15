@@ -3,7 +3,12 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Billboard, Text, Line } from '@react-three/drei';
 import * as THREE from 'three';
 
-const AXIS_COLOR = '#6cb6ff';
+const AXIS_COLOR = '#B4B8C5';
+const VECTOR_COLOR = '#34EAC5';
+const PHASE_BLUE = '#4DBAF5';
+const PHASE_PURPLE = '#B08CFF';
+const CONTROL_SIGNAL_COLOR = '#FFC800';
+const KICKBACK_SIGNAL_COLOR = '#FE2048';
 const AXIS_OPACITY = 0.2;
 const AXIS_WIDGET_STYLE = {
     position: 'absolute',
@@ -410,32 +415,32 @@ function StateArrow({ targetCoords, rotations = [], opacity = 1, isPlayMode = fa
     return (
         <group>
             {/* Main State Arrow - extended green stick to touch cone */}
-            <Line points={[[0, 0, 0], [displayVec.x * lineLen, displayVec.y * lineLen, displayVec.z * lineLen]]} color="#00ff88" lineWidth={3} transparent opacity={currentOpacity} />
+            <Line points={[[0, 0, 0], [displayVec.x * lineLen, displayVec.y * lineLen, displayVec.z * lineLen]]} color={VECTOR_COLOR} lineWidth={3} transparent opacity={currentOpacity} />
             {/* Arrow head - taller and smaller */}
             <mesh position={position} quaternion={quaternion}>
                 <coneGeometry args={[coneRadius, coneHeight, 12]} />
-                <meshStandardMaterial color="#00ff88" emissive="#00ff88" emissiveIntensity={0.4} transparent opacity={currentOpacity} />
+                <meshStandardMaterial color={VECTOR_COLOR} emissive={VECTOR_COLOR} emissiveIntensity={0.4} transparent opacity={currentOpacity} />
             </mesh>
 
             {/* Blue Lambda Stick - lower on vector, shows lambda phase */}
-            <Line points={lambdaRefEnd} color="#3b82f6" lineWidth={1} dashed dashScale={40} transparent opacity={currentOpacity * 0.4} />
-            <Line points={lambdaStickEnd} color="#3b82f6" lineWidth={3} transparent opacity={currentOpacity * 0.8} />
+            <Line points={lambdaRefEnd} color={PHASE_BLUE} lineWidth={1} dashed dashScale={40} transparent opacity={currentOpacity * 0.4} />
+            <Line points={lambdaStickEnd} color={PHASE_BLUE} lineWidth={3} transparent opacity={currentOpacity * 0.8} />
 
             {/* Purple Phi Stick - at base of cone, shows phi phase */}
-            <Line points={phiRefEnd} color="#a855f7" lineWidth={1} dashed dashScale={40} transparent opacity={currentOpacity * 0.4} />
-            <Line points={phiStickEnd} color="#a855f7" lineWidth={3} transparent opacity={currentOpacity} />
+            <Line points={phiRefEnd} color={PHASE_PURPLE} lineWidth={1} dashed dashScale={40} transparent opacity={currentOpacity * 0.4} />
+            <Line points={phiStickEnd} color={PHASE_PURPLE} lineWidth={3} transparent opacity={currentOpacity} />
 
             {/* Blue Lambda Arc - shows accumulated lambda rotation */}
             {lambdaArcPoints && (
                 <group position={lambdaArcPosition} quaternion={arcQuaternion}>
-                    <Line points={lambdaArcPoints} color="#3b82f6" lineWidth={2} transparent opacity={currentOpacity * 0.8} />
+                    <Line points={lambdaArcPoints} color={PHASE_BLUE} lineWidth={2} transparent opacity={currentOpacity * 0.8} />
                 </group>
             )}
 
             {/* Purple Phi Arc - shows accumulated phi rotation */}
             {phiArcPoints && (
                 <group position={phiArcPosition} quaternion={arcQuaternion}>
-                    <Line points={phiArcPoints} color="#a855f7" lineWidth={2} transparent opacity={currentOpacity * 0.8} />
+                    <Line points={phiArcPoints} color={PHASE_PURPLE} lineWidth={2} transparent opacity={currentOpacity * 0.8} />
                 </group>
             )}
         </group>
@@ -455,7 +460,7 @@ function ControlSignal({ fromPosition, toPosition, onComplete, variant = 'contro
     const DURATION = 0.2; // 0.2 second animation
 
     // Colors based on variant
-    const color = variant === 'kickback' ? '#66ffff' : '#ff9900';
+    const color = variant === 'kickback' ? KICKBACK_SIGNAL_COLOR : CONTROL_SIGNAL_COLOR;
     const curveDirection = variant === 'kickback' ? -1 : 1; // -1 = down, 1 = up
 
     // Calculate curve arc height based on distance
@@ -661,7 +666,7 @@ function SingleBlochSphere({ branches, position = [0, 0, 0], qubitIndex, isPlayM
     return (
         <group position={position}>
             <Billboard position={[0, 1.6, 0]}>
-                <Text fontSize={0.1} color="#8b949e" anchorX="center" anchorY="middle">q[{qubitIndex}]</Text>
+                <Text fontSize={0.1} color="#8B91A5" anchorX="center" anchorY="middle">q[{qubitIndex}]</Text>
             </Billboard>
             {[0, 1, 2].map(i => (
                 <Line key={i} points={Array.from({ length: 65 }, (_, j) => {
@@ -746,9 +751,9 @@ function AxisOverlayWidget({ cameraQuaternionRef }) {
     const worldToViewQuatRef = useRef(new THREE.Quaternion());
     const axes = useMemo(() => ([
         // Bloch axis mapping in Three space: X->X, Y->Z, Z->Y.
-        { label: 'X', dir: new THREE.Vector3(1, 0, 0), color: '#ff6b6b' },
-        { label: 'Y', dir: new THREE.Vector3(0, 0, 1), color: '#66ffff' },
-        { label: 'Z', dir: new THREE.Vector3(0, 1, 0), color: '#6cb6ff' }
+        { label: 'X', dir: new THREE.Vector3(1, 0, 0), color: '#FFD80D' },
+        { label: 'Y', dir: new THREE.Vector3(0, 0, 1), color: '#FF6581' },
+        { label: 'Z', dir: new THREE.Vector3(0, 1, 0), color: '#34EAC5' }
     ]), []);
     const axisLength = 0.68;
     const labelDistance = 0.88;
@@ -932,7 +937,7 @@ export default function BlochSphereView({ qubitBranches, visibility, focusQubit,
     const camDist = Math.max(5, 3 + numVisible * 1.1);
 
     return (
-        <div style={{ width: '100%', height: '100%', background: '#0d1117', position: 'relative' }}>
+        <div style={{ width: '100%', height: '100%', background: 'var(--qbits-bg)', position: 'relative' }}>
             <Canvas camera={{ position: [camDist, camDist * 0.6, camDist], fov: 45, near: 0.1, far: 1000 }}>
                 <Scene
                     sphereData={sphereData}
@@ -949,7 +954,7 @@ export default function BlochSphereView({ qubitBranches, visibility, focusQubit,
                 <Canvas
                     camera={{ position: [0, 0, 3.2], fov: 35, near: 0.1, far: 20 }}
                     gl={{ alpha: true }}
-                    onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}
+                    onCreated={({ gl }) => gl.setClearColor(0x24252D, 0)}
                 >
                     <AxisOverlayWidget cameraQuaternionRef={cameraQuaternionRef} />
                 </Canvas>

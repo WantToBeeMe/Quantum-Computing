@@ -42,14 +42,14 @@ export const createU3Matrix = (theta, phi, lambda) => [
     [cScale(cFromPolar(1, phi), Math.sin(theta / 2)), cScale(cFromPolar(1, phi + lambda), Math.cos(theta / 2))]
 ];
 
-// Gate colors: I/X=Green (X-axis), Y=Purple (Y-axis), Z/S/T=Blue (Z-axis)
+// Gate colors (pastel theme): I/X share the same green used by state vectors.
 // All gates store both matrix and decomposition for unified handling
 export const GATES = {
     I: {
         name: 'I',
         label: 'I',
         description: 'Identity - does nothing',
-        color: '#3fb950',
+        color: '#8EFFE2',
         showDecomposition: false,
         animDuration: 0,
         defaultMatrix: [[complex(1), complex(0)], [complex(0), complex(1)]],
@@ -59,7 +59,7 @@ export const GATES = {
         name: 'X',
         label: 'X',
         description: 'Pauli-X (NOT) - π rotation around X axis',
-        color: '#3fb950',
+        color: '#8EFFE2',
         showDecomposition: false,
         animDuration: 1,
         defaultMatrix: [[complex(0), complex(1)], [complex(1), complex(0)]],
@@ -69,7 +69,7 @@ export const GATES = {
         name: 'Y',
         label: 'Y',
         description: 'Pauli-Y - π rotation around Y axis',
-        color: '#a371f7',
+        color: '#B08CFF',
         showDecomposition: false,
         animDuration: 1,
         defaultMatrix: [[complex(0), complex(0, -1)], [complex(0, 1), complex(0)]],
@@ -79,7 +79,7 @@ export const GATES = {
         name: 'Z',
         label: 'Z',
         description: 'Pauli-Z - π rotation around Z axis (phase flip)',
-        color: '#58a6ff',
+        color: '#4DBAF5',
         showDecomposition: false,
         animDuration: 1,
         defaultMatrix: [[complex(1), complex(0)], [complex(0), complex(-1)]],
@@ -89,7 +89,7 @@ export const GATES = {
         name: 'H',
         label: 'H',
         description: 'Hadamard - creates superposition',
-        color: '#f85149',
+        color: '#FE2048',
         showDecomposition: false,
         animDuration: 1,
         defaultMatrix: [[complex(SQRT2_INV), complex(SQRT2_INV)], [complex(SQRT2_INV), complex(-SQRT2_INV)]],
@@ -99,7 +99,7 @@ export const GATES = {
         name: 'S',
         label: 'S',
         description: 'S gate - π/2 rotation around Z axis',
-        color: '#58a6ff',
+        color: '#4DBAF5',
         showDecomposition: false,
         animDuration: 0.5,
         defaultMatrix: [[complex(1), complex(0)], [complex(0), complex(0, 1)]],
@@ -109,7 +109,7 @@ export const GATES = {
         name: 'T',
         label: 'T',
         description: 'T gate - π/4 rotation around Z axis',
-        color: '#58a6ff',
+        color: '#4DBAF5',
         showDecomposition: false,
         animDuration: 0.25,
         defaultMatrix: [[complex(1), complex(0)], [complex(0), cFromPolar(1, Math.PI / 4)]],
@@ -119,7 +119,7 @@ export const GATES = {
         name: 'U',
         label: 'U',
         description: 'Universal gate - U(θ, φ, λ)',
-        color: '#ffcc00',
+        color: '#FFD80D',
         showDecomposition: true,
         animDuration: null, // Computed from params
         defaultMatrix: [[complex(1), complex(0)], [complex(0), complex(1)]], // Identity by default
@@ -129,7 +129,7 @@ export const GATES = {
         name: 'BARRIER',
         label: '┃',
         description: 'Barrier - visual separator',
-        color: '#8b949e',
+        color: '#D7D9E0',
         isBarrier: true,
         showDecomposition: false,
         animDuration: 0,

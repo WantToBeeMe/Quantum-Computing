@@ -341,7 +341,6 @@ export default function CircuitBuilder({
                                             top: `${topY}px`,
                                             width: '2px',
                                             height: `${bottomY - topY}px`,
-                                            background: '#ff9900',
                                             pointerEvents: 'none',
                                             zIndex: 1
                                         }}
@@ -399,7 +398,7 @@ export default function CircuitBuilder({
                                         <div
                                             key={`gate-${qi}-${si}`}
                                             className={`circuit-gate ${isSelected ? 'selected' : ''} ${isBeingDragged ? 'dragging' : ''} ${isDisabled ? 'disabled' : ''} ${gate.gate === 'CONTROL' ? 'control-node' : ''} ${pairedSel ? 'paired-selected' : ''}`}
-                                            style={{ '--slot': si, '--row': qi, '--gate-color': gate.color || '#ff9900' }}
+                                            style={{ '--slot': si, '--row': qi, '--gate-color': gate.color || 'var(--qbits-accent)' }}
                                             onClick={() => handleGateClickInternal(qi, si, gate)}
                                             onMouseDown={(e) => !isPlaying && e.button === 1 && handleGateMiddleClickInternal(qi, si)}
                                             draggable={!isPlaying}
